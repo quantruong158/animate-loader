@@ -123,6 +123,8 @@ export function LoaderEditor({
         dispatch({ type: 'SET_TOOL', tool: 'select' })
       } else if (e.key === 'x' || e.key === 'X') {
         dispatch({ type: 'SET_TOOL', tool: 'picker' })
+      } else if (e.key === 'f' || e.key === 'F') {
+        dispatch({ type: 'SET_TOOL', tool: 'fill' })
       } else if (e.key === 'c' || e.key === 'C') {
         if (!editor.isPlaying) {
           dispatch({ type: 'CLEAR_FRAME', frame: editor.currentFrame })
@@ -175,7 +177,12 @@ export function LoaderEditor({
 
   const handlePaint = useCallback(
     (row: number, col: number) => {
-      if (editor.tool === 'select' || editor.tool === 'picker') return
+      if (
+        editor.tool === 'select' ||
+        editor.tool === 'picker' ||
+        editor.tool === 'fill'
+      )
+        return
       dispatch({
         type: 'PAINT_CELL',
         row,
@@ -188,6 +195,21 @@ export function LoaderEditor({
       })
     },
     [isErase, editor.selectedColor, editor.brushSize, editor.tool],
+  )
+
+  const handleFill = useCallback(
+    (row: number, col: number) => {
+      dispatch({
+        type: 'FILL_CELL',
+        row,
+        col,
+        color:
+          isErase || editor.tool === 'eraser'
+            ? 'transparent'
+            : editor.selectedColor,
+      })
+    },
+    [isErase, editor.selectedColor, editor.tool],
   )
 
   const handlePick = useCallback(
@@ -317,6 +339,7 @@ export function LoaderEditor({
           isPlaying={editor.isPlaying}
           tool={editor.tool}
           onCellPaint={handlePaint}
+          onCellFill={handleFill}
           onCellPick={handlePick}
           onPaintSessionStart={() => dispatch({ type: 'BEGIN_PAINT_SESSION' })}
           onPaintSessionEnd={() => dispatch({ type: 'END_PAINT_SESSION' })}
@@ -365,6 +388,7 @@ export function LoaderEditor({
             dispatch({ type: 'SET_TOOL', tool })
             if (tool === 'brush') setIsErase(false)
             if (tool === 'eraser') setIsErase(true)
+            if (tool === 'fill') setIsErase(false)
           }}
           onBrushSizeChange={(size) =>
             dispatch({ type: 'SET_BRUSH_SIZE', size })

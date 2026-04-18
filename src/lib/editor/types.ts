@@ -21,7 +21,7 @@ export interface EditorState {
   brushSize: 1 | 3
   selectedColor: string
   isPlaying: boolean
-  tool: 'brush' | 'eraser' | 'select' | 'picker'
+  tool: 'brush' | 'eraser' | 'select' | 'picker' | 'fill'
 }
 
 export interface HistoryState {

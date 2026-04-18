@@ -2,7 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react'
 import { getBrushCells } from '@/lib/editor/types'
 import type { Grid } from '@/lib/editor/types'
 
-type ToolMode = 'brush' | 'eraser' | 'select' | 'picker'
+type ToolMode = 'brush' | 'eraser' | 'select' | 'picker' | 'fill'
 
 interface SelectionRect {
   from: [number, number]
@@ -21,6 +21,7 @@ interface GridCanvasProps {
   isPlaying: boolean
   tool: ToolMode
   onCellPaint: (row: number, col: number) => void
+  onCellFill: (row: number, col: number) => void
   onCellPick: (row: number, col: number) => void
   onPaintSessionStart: () => void
   onPaintSessionEnd: () => void
@@ -113,6 +114,7 @@ export function GridCanvas({
   isPlaying,
   tool,
   onCellPaint,
+  onCellFill,
   onCellPick,
   onPaintSessionStart,
   onPaintSessionEnd,
@@ -322,7 +324,11 @@ export function GridCanvas({
   }, [finalizeMarqueeSelection, finalizeSelectionDrag, onPaintSessionEnd, tool])
 
   const hoverCells =
-    isPlaying || tool === 'select' || tool === 'picker' || !hoverCell
+    isPlaying ||
+    tool === 'select' ||
+    tool === 'picker' ||
+    tool === 'fill' ||
+    !hoverCell
       ? []
       : getBrushCells(hoverCell[0], hoverCell[1], brushSize, grid.size)
 
@@ -367,6 +373,13 @@ export function GridCanvas({
     if (tool === 'picker') {
       if (cell) {
         onCellPick(cell[0], cell[1])
+      }
+      return
+    }
+
+    if (tool === 'fill') {
+      if (cell) {
+        onCellFill(cell[0], cell[1])
       }
       return
     }
@@ -501,7 +514,7 @@ export function GridCanvas({
               width={cellSize}
               height={cellSize}
               fill={cell}
-              stroke={gridLineColor}
+              stroke={isPlaying ? 'none' : gridLineColor}
               strokeWidth={0.5}
             />
           )

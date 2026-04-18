@@ -4,6 +4,7 @@ import { cloneFrame, createProject, getBrushCells } from './types'
 export interface EditorAction {
   type:
     | 'PAINT_CELL'
+    | 'FILL_CELL'
     | 'SET_BRUSH_SIZE'
     | 'SET_TOOL'
     | 'SET_COLOR'
@@ -25,7 +26,7 @@ export interface EditorAction {
   col?: number
   color?: CellColor
   size?: 1 | 3
-  tool?: 'brush' | 'eraser' | 'select' | 'picker'
+  tool?: 'brush' | 'eraser' | 'select' | 'picker' | 'fill'
   brushSize?: 1 | 3
   gridSize?: number
   frame?: number
@@ -69,6 +70,64 @@ function paintCell(
     if (newFrames[currentFrame].grid.cells[r][c] !== color) {
       changed = true
       newFrames[currentFrame].grid.cells[r][c] = color
+    }
+  }
+
+  return { frames: newFrames, changed }
+}
+
+function fillCell(
+  frames: { grid: { size: number; cells: CellColor[][] } }[],
+  currentFrame: number,
+  row: number,
+  col: number,
+  color: CellColor,
+) {
+  const newFrames = frames.map((f, i) => {
+    if (i !== currentFrame) return f
+    return {
+      grid: {
+        size: f.grid.size,
+        cells: f.grid.cells.map((r) => [...r]),
+      },
+    }
+  })
+
+  const frame = newFrames[currentFrame]
+  const gridSize = frame.grid.size
+  if (row < 0 || row >= gridSize || col < 0 || col >= gridSize) {
+    return { frames: newFrames, changed: false }
+  }
+
+  const targetColor = frame.grid.cells[row][col]
+  if (targetColor === color) {
+    return { frames: newFrames, changed: false }
+  }
+
+  const queue: [number, number][] = [[row, col]]
+  const seen = new Set<string>([`${row},${col}`])
+  let changed = false
+
+  while (queue.length > 0) {
+    const [r, c] = queue.shift()!
+    if (frame.grid.cells[r][c] !== targetColor) continue
+
+    frame.grid.cells[r][c] = color
+    changed = true
+
+    const neighbors: [number, number][] = [
+      [r - 1, c],
+      [r + 1, c],
+      [r, c - 1],
+      [r, c + 1],
+    ]
+
+    for (const [nr, nc] of neighbors) {
+      if (nr < 0 || nr >= gridSize || nc < 0 || nc >= gridSize) continue
+      const key = `${nr},${nc}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      queue.push([nr, nc])
     }
   }
 
@@ -192,6 +251,29 @@ export function editorReducer(
         }
       }
 
+      return {
+        project: newProject,
+        editor,
+        history: [...history, current],
+        future: [],
+        paintSessionStart: null,
+        paintSessionDirty: false,
+      }
+    }
+    case 'FILL_CELL': {
+      const { row, col, color } = action
+      if (row == null || col == null || color == null) return state
+
+      const { frames: newFrames, changed } = fillCell(
+        project.frames,
+        editor.currentFrame,
+        row,
+        col,
+        color,
+      )
+      if (!changed) return state
+
+      const newProject = { ...project, frames: newFrames }
       return {
         project: newProject,
         editor,

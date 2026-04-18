@@ -5,6 +5,7 @@ import type { RgbaColor } from 'react-colorful'
 import {
   Brush,
   Eraser,
+  PaintBucket,
   Undo2,
   Redo2,
   Copy,
@@ -63,7 +64,7 @@ function swatchVars(color: string): CSSProperties {
 }
 
 interface BrushToolbarProps {
-  tool: 'brush' | 'eraser' | 'select' | 'picker'
+  tool: 'brush' | 'eraser' | 'select' | 'picker' | 'fill'
   brushSize: 1 | 3
   selectedColor: string
   isPlaying: boolean
@@ -72,7 +73,9 @@ interface BrushToolbarProps {
   usedColors: string[]
   canUndo: boolean
   canRedo: boolean
-  onToolChange: (tool: 'brush' | 'eraser' | 'select' | 'picker') => void
+  onToolChange: (
+    tool: 'brush' | 'eraser' | 'select' | 'picker' | 'fill',
+  ) => void
   onBrushSizeChange: (size: 1 | 3) => void
   onColorChange: (color: string) => void
   onIsEraseChange: (isErase: boolean) => void
@@ -150,6 +153,15 @@ export function BrushToolbar({
       {/* Brush/Eraser toggle */}
       <div className="flex items-center gap-1">
         <Button
+          variant={tool === 'select' ? 'default' : 'outline'}
+          onClick={() => onToolChange('select')}
+          disabled={isPlaying}
+          title="Select (V)"
+        >
+          <MousePointer2 className="w-4 h-4 mr-1" />
+          <Kbd>V</Kbd>
+        </Button>
+        <Button
           variant={tool === 'brush' ? 'default' : 'outline'}
           onClick={() => {
             onToolChange('brush')
@@ -174,15 +186,6 @@ export function BrushToolbar({
           <Kbd>E</Kbd>
         </Button>
         <Button
-          variant={tool === 'select' ? 'default' : 'outline'}
-          onClick={() => onToolChange('select')}
-          disabled={isPlaying}
-          title="Select (V)"
-        >
-          <MousePointer2 className="w-4 h-4 mr-1" />
-          <Kbd>V</Kbd>
-        </Button>
-        <Button
           variant={tool === 'picker' ? 'default' : 'outline'}
           onClick={() => {
             onToolChange('picker')
@@ -193,6 +196,18 @@ export function BrushToolbar({
         >
           <Pipette className="w-4 h-4 mr-1" />
           <Kbd>X</Kbd>
+        </Button>
+        <Button
+          variant={tool === 'fill' ? 'default' : 'outline'}
+          onClick={() => {
+            onToolChange('fill')
+            onIsEraseChange(false)
+          }}
+          disabled={isPlaying}
+          title="Fill (F)"
+        >
+          <PaintBucket className="w-4 h-4 mr-1" />
+          <Kbd>F</Kbd>
         </Button>
       </div>
 
@@ -206,7 +221,7 @@ export function BrushToolbar({
             key={size}
             variant={brushSize === size ? 'default' : 'outline'}
             onClick={() => onBrushSizeChange(size)}
-            disabled={isPlaying || tool === 'select'}
+            disabled={isPlaying || tool === 'select' || tool === 'fill'}
             className="size-8"
           >
             {size}
