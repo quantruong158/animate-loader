@@ -206,3 +206,29 @@ export function downloadSVG(project: Project, filename = 'loader.svg') {
   const svg = exportSVG(project)
   downloadBlob(new Blob([svg], { type: 'image/svg+xml' }), filename)
 }
+
+export function exportFrameSVG(frame: Frame): string {
+  const cellSize = 10
+  const svgSize = frame.grid.size * cellSize
+  const rects: string[] = []
+
+  for (let r = 0; r < frame.grid.size; r++) {
+    for (let c = 0; c < frame.grid.size; c++) {
+      const cell = frame.grid.cells[r][c]
+      if (cell === 'transparent') continue
+
+      const x = c * cellSize
+      const y = r * cellSize
+      rects.push(
+        `<rect x="${x}" y="${y}" width="${cellSize}" height="${cellSize}" fill="${cell}"/>`,
+      )
+    }
+  }
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${svgSize} ${svgSize}" width="${svgSize}" height="${svgSize}">${rects.join('')}</svg>`
+}
+
+export function downloadFrameSVG(frame: Frame, filename = 'frame.svg') {
+  const svg = exportFrameSVG(frame)
+  downloadBlob(new Blob([svg], { type: 'image/svg+xml' }), filename)
+}

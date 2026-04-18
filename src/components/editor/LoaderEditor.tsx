@@ -13,6 +13,7 @@ import { BrushToolbar } from './BrushToolbar'
 import { editorReducer, createInitialState } from '@/lib/editor/reducer'
 import {
   downloadProjectJSON,
+  downloadFrameSVG,
   downloadSVG,
   parseProjectJSON,
 } from '@/lib/editor/export'
@@ -231,6 +232,13 @@ export function LoaderEditor({
     downloadSVG(project)
   }
 
+  const handleExportCurrentFrame = () => {
+    downloadFrameSVG(
+      currentFrame,
+      `loader-frame-${editor.currentFrame + 1}.svg`,
+    )
+  }
+
   const handleExportJSON = () => {
     downloadProjectJSON(project)
   }
@@ -317,6 +325,9 @@ export function LoaderEditor({
               <DropdownMenuContent align="end">
                 <DropdownMenuItem onClick={handleExport}>
                   Export SVG
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleExportCurrentFrame}>
+                  Export Current Frame SVG
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={handleExportJSON}>
                   Export JSON
