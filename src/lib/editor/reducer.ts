@@ -17,6 +17,8 @@ export interface EditorAction {
     | 'CLEAR_FRAME'
     | 'TOGGLE_PLAYING'
     | 'MOVE_SELECTION'
+    | 'BEGIN_PAINT_SESSION'
+    | 'END_PAINT_SESSION'
     | 'UNDO'
     | 'REDO'
   row?: number
@@ -60,13 +62,17 @@ function paintCell(
     }
   })
 
+  let changed = false
   const gridSize = newFrames[currentFrame].grid.size
   const cells = getBrushCells(row, col, brushSize, gridSize)
   for (const [r, c] of cells) {
-    newFrames[currentFrame].grid.cells[r][c] = color
+    if (newFrames[currentFrame].grid.cells[r][c] !== color) {
+      changed = true
+      newFrames[currentFrame].grid.cells[r][c] = color
+    }
   }
 
-  return newFrames
+  return { frames: newFrames, changed }
 }
 
 function moveSelection(
@@ -129,21 +135,30 @@ export interface EditorReducerState {
   editor: EditorState
   history: HistoryState[]
   future: HistoryState[]
+  paintSessionStart: HistoryState | null
+  paintSessionDirty: boolean
 }
 
 export function editorReducer(
   state: EditorReducerState,
   action: EditorAction,
 ): EditorReducerState {
-  const { project, editor, history, future } = state
-  const current: HistoryState = { project, editor }
+  const {
+    project,
+    editor,
+    history,
+    future,
+    paintSessionStart,
+    paintSessionDirty,
+  } = state
+  const current: HistoryState = { project }
 
   switch (action.type) {
     case 'PAINT_CELL': {
       const { row, col, color, brushSize } = action
       if (row == null || col == null || color == null || brushSize == null)
         return state
-      const newFrames = paintCell(
+      const { frames: newFrames, changed } = paintCell(
         project.frames,
         editor.currentFrame,
         row,
@@ -151,12 +166,61 @@ export function editorReducer(
         color,
         brushSize,
       )
+      if (!changed) return state
+
       const newProject = { ...project, frames: newFrames }
+
+      if (paintSessionStart) {
+        if (paintSessionDirty) {
+          return {
+            project: newProject,
+            editor,
+            history,
+            future: [],
+            paintSessionStart,
+            paintSessionDirty,
+          }
+        }
+
+        return {
+          project: newProject,
+          editor,
+          history: [...history, paintSessionStart],
+          future: [],
+          paintSessionStart,
+          paintSessionDirty: true,
+        }
+      }
+
       return {
         project: newProject,
         editor,
         history: [...history, current],
         future: [],
+        paintSessionStart: null,
+        paintSessionDirty: false,
+      }
+    }
+    case 'BEGIN_PAINT_SESSION': {
+      if (paintSessionStart) return state
+      return {
+        project,
+        editor,
+        history,
+        future,
+        paintSessionStart: current,
+        paintSessionDirty: false,
+      }
+    }
+    case 'END_PAINT_SESSION': {
+      if (!paintSessionStart && !paintSessionDirty) return state
+      return {
+        project,
+        editor,
+        history,
+        future,
+        paintSessionStart: null,
+        paintSessionDirty: false,
       }
     }
     case 'SET_BRUSH_SIZE': {
@@ -167,6 +231,8 @@ export function editorReducer(
         editor: newEditor,
         history: [...history, current],
         future: [],
+        paintSessionStart: null,
+        paintSessionDirty: false,
       }
     }
     case 'SET_TOOL': {
@@ -177,6 +243,8 @@ export function editorReducer(
         editor: newEditor,
         history,
         future,
+        paintSessionStart: null,
+        paintSessionDirty: false,
       }
     }
     case 'SET_COLOR': {
@@ -188,6 +256,8 @@ export function editorReducer(
         editor: newEditor,
         history,
         future,
+        paintSessionStart: null,
+        paintSessionDirty: false,
       }
     }
     case 'SET_CURRENT_FRAME': {
@@ -195,13 +265,22 @@ export function editorReducer(
       const newEditor = { ...editor, currentFrame: action.frame }
       // Don't add to history for frame changes during playback - just state update
       if (editor.isPlaying) {
-        return { project, editor: newEditor, history, future }
+        return {
+          project,
+          editor: newEditor,
+          history,
+          future,
+          paintSessionStart: null,
+          paintSessionDirty: false,
+        }
       }
       return {
         project,
         editor: newEditor,
         history: [...history, current],
         future: [],
+        paintSessionStart: null,
+        paintSessionDirty: false,
       }
     }
     case 'ADD_FRAME': {
@@ -231,6 +310,8 @@ export function editorReducer(
         editor: newEditor,
         history: [...history, current],
         future: [],
+        paintSessionStart: null,
+        paintSessionDirty: false,
       }
     }
     case 'DELETE_FRAME': {
@@ -251,6 +332,8 @@ export function editorReducer(
         editor: newEditor,
         history: [...history, current],
         future: [],
+        paintSessionStart: null,
+        paintSessionDirty: false,
       }
     }
     case 'SET_GRID_SIZE': {
@@ -266,6 +349,8 @@ export function editorReducer(
         editor: newEditor,
         history: [...history, current],
         future: [],
+        paintSessionStart: null,
+        paintSessionDirty: false,
       }
     }
     case 'SET_FRAME_RATE': {
@@ -276,6 +361,8 @@ export function editorReducer(
         editor,
         history: [...history, current],
         future: [],
+        paintSessionStart: null,
+        paintSessionDirty: false,
       }
     }
     case 'LOAD_PROJECT': {
@@ -291,6 +378,8 @@ export function editorReducer(
         },
         history: [],
         future: [],
+        paintSessionStart: null,
+        paintSessionDirty: false,
       }
     }
     case 'CLONE_FRAME': {
@@ -324,6 +413,8 @@ export function editorReducer(
         editor,
         history: [...history, current],
         future: [],
+        paintSessionStart: null,
+        paintSessionDirty: false,
       }
     }
     case 'CLEAR_FRAME': {
@@ -345,6 +436,8 @@ export function editorReducer(
         editor,
         history: [...history, current],
         future: [],
+        paintSessionStart: null,
+        paintSessionDirty: false,
       }
     }
     case 'TOGGLE_PLAYING':
@@ -353,6 +446,8 @@ export function editorReducer(
         editor: { ...editor, isPlaying: !editor.isPlaying },
         history,
         future,
+        paintSessionStart: null,
+        paintSessionDirty: false,
       }
     case 'MOVE_SELECTION': {
       const { fromRow, fromCol, toRow, toCol, deltaRow, deltaCol } = action
@@ -384,6 +479,8 @@ export function editorReducer(
         editor,
         history: [...history, current],
         future: [],
+        paintSessionStart: null,
+        paintSessionDirty: false,
       }
     }
     case 'UNDO': {
@@ -391,9 +488,11 @@ export function editorReducer(
       const previous = history[history.length - 1]
       return {
         project: previous.project,
-        editor: previous.editor,
+        editor,
         history: history.slice(0, -1),
         future: [current, ...future],
+        paintSessionStart: null,
+        paintSessionDirty: false,
       }
     }
     case 'REDO': {
@@ -401,9 +500,11 @@ export function editorReducer(
       const next = future[0]
       return {
         project: next.project,
-        editor: next.editor,
+        editor,
         history: [...history, current],
         future: future.slice(1),
+        paintSessionStart: null,
+        paintSessionDirty: false,
       }
     }
     default:
@@ -429,5 +530,7 @@ export function createInitialState(
     editor,
     history: [],
     future: [],
+    paintSessionStart: null,
+    paintSessionDirty: false,
   }
 }

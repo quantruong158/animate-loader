@@ -22,6 +22,8 @@ interface GridCanvasProps {
   tool: ToolMode
   onCellPaint: (row: number, col: number) => void
   onCellPick: (row: number, col: number) => void
+  onPaintSessionStart: () => void
+  onPaintSessionEnd: () => void
   onMoveSelection: (
     fromRow: number,
     fromCol: number,
@@ -112,6 +114,8 @@ export function GridCanvas({
   tool,
   onCellPaint,
   onCellPick,
+  onPaintSessionStart,
+  onPaintSessionEnd,
   onMoveSelection,
   canvasSize = 400,
 }: GridCanvasProps) {
@@ -126,6 +130,7 @@ export function GridCanvas({
   const [isDraggingSelection, setIsDraggingSelection] = useState(false)
   const [dragDelta, setDragDelta] = useState<[number, number]>([0, 0])
   const lastCellRef = useRef<[number, number] | null>(null)
+  const isMouseDownRef = useRef(false)
   const selectionAnchorRef = useRef<[number, number] | null>(null)
   const dragAnchorRef = useRef<[number, number] | null>(null)
   const selectionRectRef = useRef<SelectionRect | null>(null)
@@ -151,6 +156,10 @@ export function GridCanvas({
   useEffect(() => {
     dragDeltaRef.current = dragDelta
   }, [dragDelta])
+
+  useEffect(() => {
+    isMouseDownRef.current = isMouseDown
+  }, [isMouseDown])
 
   useEffect(() => {
     isSelectingRef.current = isSelecting
@@ -298,6 +307,9 @@ export function GridCanvas({
 
   useEffect(() => {
     const handleWindowMouseUp = () => {
+      if (isMouseDownRef.current) {
+        onPaintSessionEnd()
+      }
       if (tool === 'select') {
         finalizeMarqueeSelection()
         finalizeSelectionDrag()
@@ -307,7 +319,7 @@ export function GridCanvas({
     }
     window.addEventListener('mouseup', handleWindowMouseUp)
     return () => window.removeEventListener('mouseup', handleWindowMouseUp)
-  }, [finalizeMarqueeSelection, finalizeSelectionDrag, tool])
+  }, [finalizeMarqueeSelection, finalizeSelectionDrag, onPaintSessionEnd, tool])
 
   const hoverCells =
     isPlaying || tool === 'select' || tool === 'picker' || !hoverCell
@@ -378,6 +390,7 @@ export function GridCanvas({
     }
 
     if (cell) {
+      onPaintSessionStart()
       setIsMouseDown(true)
       lastCellRef.current = cell
       handlePaintAt(cell)
@@ -424,6 +437,7 @@ export function GridCanvas({
 
     setIsMouseDown(false)
     lastCellRef.current = null
+    onPaintSessionEnd()
   }
 
   const handleMouseLeave = () => {

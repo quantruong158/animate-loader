@@ -318,6 +318,8 @@ export function LoaderEditor({
           tool={editor.tool}
           onCellPaint={handlePaint}
           onCellPick={handlePick}
+          onPaintSessionStart={() => dispatch({ type: 'BEGIN_PAINT_SESSION' })}
+          onPaintSessionEnd={() => dispatch({ type: 'END_PAINT_SESSION' })}
           onMoveSelection={(
             fromRow,
             fromCol,

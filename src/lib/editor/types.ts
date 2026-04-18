@@ -26,7 +26,6 @@ export interface EditorState {
 
 export interface HistoryState {
   project: Project
-  editor: EditorState
 }
 
 export function createEmptyGrid(size: number): Grid {
