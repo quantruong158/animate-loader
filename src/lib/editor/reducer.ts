@@ -5,6 +5,7 @@ export interface EditorAction {
   type:
     | 'PAINT_CELL'
     | 'SET_BRUSH_SIZE'
+    | 'SET_TOOL'
     | 'SET_COLOR'
     | 'SET_CURRENT_FRAME'
     | 'ADD_FRAME'
@@ -15,21 +16,30 @@ export interface EditorAction {
     | 'CLONE_FRAME'
     | 'CLEAR_FRAME'
     | 'TOGGLE_PLAYING'
+    | 'MOVE_SELECTION'
     | 'UNDO'
     | 'REDO'
   row?: number
   col?: number
   color?: CellColor
   size?: 1 | 3
+  tool?: 'brush' | 'eraser' | 'select' | 'picker'
   brushSize?: 1 | 3
   gridSize?: number
   frame?: number
+  index?: number
   project?: Project
   source?: number
   target?: number
   merge?: boolean
   rate?: number
   count?: number
+  fromRow?: number
+  fromCol?: number
+  toRow?: number
+  toCol?: number
+  deltaRow?: number
+  deltaCol?: number
 }
 
 function paintCell(
@@ -54,6 +64,61 @@ function paintCell(
   const cells = getBrushCells(row, col, brushSize, gridSize)
   for (const [r, c] of cells) {
     newFrames[currentFrame].grid.cells[r][c] = color
+  }
+
+  return newFrames
+}
+
+function moveSelection(
+  frames: { grid: { size: number; cells: CellColor[][] } }[],
+  currentFrame: number,
+  fromRow: number,
+  fromCol: number,
+  toRow: number,
+  toCol: number,
+  deltaRow: number,
+  deltaCol: number,
+) {
+  const newFrames = frames.map((f, i) => {
+    if (i !== currentFrame) return f
+    return {
+      grid: {
+        size: f.grid.size,
+        cells: f.grid.cells.map((r) => [...r]),
+      },
+    }
+  })
+
+  const frame = newFrames[currentFrame]
+  const minRow = Math.max(0, Math.min(fromRow, toRow))
+  const maxRow = Math.min(frame.grid.size - 1, Math.max(fromRow, toRow))
+  const minCol = Math.max(0, Math.min(fromCol, toCol))
+  const maxCol = Math.min(frame.grid.size - 1, Math.max(fromCol, toCol))
+
+  const snapshot: { row: number; col: number; color: CellColor }[] = []
+  for (let r = minRow; r <= maxRow; r++) {
+    for (let c = minCol; c <= maxCol; c++) {
+      const color = frame.grid.cells[r][c]
+      if (color === 'transparent') continue
+      snapshot.push({ row: r, col: c, color })
+    }
+  }
+
+  for (const cell of snapshot) {
+    frame.grid.cells[cell.row][cell.col] = 'transparent'
+  }
+
+  for (const cell of snapshot) {
+    const targetRow = cell.row + deltaRow
+    const targetCol = cell.col + deltaCol
+    if (
+      targetRow >= 0 &&
+      targetRow < frame.grid.size &&
+      targetCol >= 0 &&
+      targetCol < frame.grid.size
+    ) {
+      frame.grid.cells[targetRow][targetCol] = cell.color
+    }
   }
 
   return newFrames
@@ -102,6 +167,16 @@ export function editorReducer(
         editor: newEditor,
         history: [...history, current],
         future: [],
+      }
+    }
+    case 'SET_TOOL': {
+      if (action.tool == null || editor.tool === action.tool) return state
+      const newEditor = { ...editor, tool: action.tool }
+      return {
+        project,
+        editor: newEditor,
+        history,
+        future,
       }
     }
     case 'SET_COLOR': {
@@ -212,6 +287,7 @@ export function editorReducer(
           brushSize: 1,
           selectedColor: '#1e293b',
           isPlaying: false,
+          tool: 'brush',
         },
         history: [],
         future: [],
@@ -278,6 +354,38 @@ export function editorReducer(
         history,
         future,
       }
+    case 'MOVE_SELECTION': {
+      const { fromRow, fromCol, toRow, toCol, deltaRow, deltaCol } = action
+      if (
+        fromRow == null ||
+        fromCol == null ||
+        toRow == null ||
+        toCol == null ||
+        deltaRow == null ||
+        deltaCol == null
+      ) {
+        return state
+      }
+      if (deltaRow === 0 && deltaCol === 0) return state
+
+      const newFrames = moveSelection(
+        project.frames,
+        editor.currentFrame,
+        fromRow,
+        fromCol,
+        toRow,
+        toCol,
+        deltaRow,
+        deltaCol,
+      )
+      const newProject = { ...project, frames: newFrames }
+      return {
+        project: newProject,
+        editor,
+        history: [...history, current],
+        future: [],
+      }
+    }
     case 'UNDO': {
       if (history.length === 0) return state
       const previous = history[history.length - 1]
@@ -314,6 +422,7 @@ export function createInitialState(
     brushSize: 1,
     selectedColor: '#1e293b',
     isPlaying: false,
+    tool: 'brush',
   }
   return {
     project,

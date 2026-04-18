@@ -114,9 +114,15 @@ export function LoaderEditor({
       } else if (e.key === ']') {
         dispatch({ type: 'SET_BRUSH_SIZE', size: 3 })
       } else if (e.key === 'b' || e.key === 'B') {
+        dispatch({ type: 'SET_TOOL', tool: 'brush' })
         setIsErase(false)
       } else if (e.key === 'e' || e.key === 'E') {
+        dispatch({ type: 'SET_TOOL', tool: 'eraser' })
         setIsErase(true)
+      } else if (e.key === 'v' || e.key === 'V') {
+        dispatch({ type: 'SET_TOOL', tool: 'select' })
+      } else if (e.key === 'x' || e.key === 'X') {
+        dispatch({ type: 'SET_TOOL', tool: 'picker' })
       } else if (e.key === 'c' || e.key === 'C') {
         if (!editor.isPlaying) {
           dispatch({ type: 'CLEAR_FRAME', frame: editor.currentFrame })
@@ -169,15 +175,34 @@ export function LoaderEditor({
 
   const handlePaint = useCallback(
     (row: number, col: number) => {
+      if (editor.tool === 'select' || editor.tool === 'picker') return
       dispatch({
         type: 'PAINT_CELL',
         row,
         col,
-        color: isErase ? 'transparent' : editor.selectedColor,
+        color:
+          editor.tool === 'eraser' || isErase
+            ? 'transparent'
+            : editor.selectedColor,
         brushSize: editor.brushSize,
       })
     },
-    [isErase, editor.selectedColor, editor.brushSize],
+    [isErase, editor.selectedColor, editor.brushSize, editor.tool],
+  )
+
+  const handlePick = useCallback(
+    (row: number, col: number) => {
+      const color = currentFrame.grid.cells[row][col]
+      if (color === 'transparent') {
+        dispatch({ type: 'SET_TOOL', tool: 'eraser' })
+        setIsErase(true)
+      } else {
+        dispatch({ type: 'SET_COLOR', color })
+        dispatch({ type: 'SET_TOOL', tool: 'brush' })
+        setIsErase(false)
+      }
+    },
+    [currentFrame.grid.cells],
   )
 
   const handleExport = () => {
@@ -289,7 +314,28 @@ export function LoaderEditor({
           grid={currentFrame.grid}
           brushSize={editor.brushSize}
           isErase={isErase}
+          isPlaying={editor.isPlaying}
+          tool={editor.tool}
           onCellPaint={handlePaint}
+          onCellPick={handlePick}
+          onMoveSelection={(
+            fromRow,
+            fromCol,
+            toRow,
+            toCol,
+            deltaRow,
+            deltaCol,
+          ) =>
+            dispatch({
+              type: 'MOVE_SELECTION',
+              fromRow,
+              fromCol,
+              toRow,
+              toCol,
+              deltaRow,
+              deltaCol,
+            })
+          }
           canvasSize={canvasSize}
         />
 
@@ -304,15 +350,20 @@ export function LoaderEditor({
         />
 
         <BrushToolbar
+          tool={editor.tool}
           brushSize={editor.brushSize}
           selectedColor={editor.selectedColor}
-          isErase={isErase}
           isPlaying={editor.isPlaying}
           frameCount={project.frames.length}
           currentFrame={editor.currentFrame}
           usedColors={usedColors}
           canUndo={canUndo}
           canRedo={canRedo}
+          onToolChange={(tool) => {
+            dispatch({ type: 'SET_TOOL', tool })
+            if (tool === 'brush') setIsErase(false)
+            if (tool === 'eraser') setIsErase(true)
+          }}
           onBrushSizeChange={(size) =>
             dispatch({ type: 'SET_BRUSH_SIZE', size })
           }

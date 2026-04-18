@@ -2,7 +2,15 @@ import { useState } from 'react'
 import type { CSSProperties } from 'react'
 import { RgbaColorPicker } from 'react-colorful'
 import type { RgbaColor } from 'react-colorful'
-import { Brush, Eraser, Undo2, Redo2, Copy } from 'lucide-react'
+import {
+  Brush,
+  Eraser,
+  Undo2,
+  Redo2,
+  Copy,
+  MousePointer2,
+  Pipette,
+} from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -55,15 +63,16 @@ function swatchVars(color: string): CSSProperties {
 }
 
 interface BrushToolbarProps {
+  tool: 'brush' | 'eraser' | 'select' | 'picker'
   brushSize: 1 | 3
   selectedColor: string
-  isErase: boolean
   isPlaying: boolean
   frameCount: number
   currentFrame: number
   usedColors: string[]
   canUndo: boolean
   canRedo: boolean
+  onToolChange: (tool: 'brush' | 'eraser' | 'select' | 'picker') => void
   onBrushSizeChange: (size: 1 | 3) => void
   onColorChange: (color: string) => void
   onIsEraseChange: (isErase: boolean) => void
@@ -75,15 +84,16 @@ interface BrushToolbarProps {
 }
 
 export function BrushToolbar({
+  tool,
   brushSize,
   selectedColor,
-  isErase,
   isPlaying,
   frameCount,
   currentFrame,
   usedColors,
   canUndo,
   canRedo,
+  onToolChange,
   onBrushSizeChange,
   onColorChange,
   onIsEraseChange,
@@ -140,8 +150,11 @@ export function BrushToolbar({
       {/* Brush/Eraser toggle */}
       <div className="flex items-center gap-1">
         <Button
-          variant={!isErase ? 'default' : 'outline'}
-          onClick={() => onIsEraseChange(false)}
+          variant={tool === 'brush' ? 'default' : 'outline'}
+          onClick={() => {
+            onToolChange('brush')
+            onIsEraseChange(false)
+          }}
           disabled={isPlaying}
           title="Brush (B)"
         >
@@ -149,13 +162,37 @@ export function BrushToolbar({
           <Kbd>B</Kbd>
         </Button>
         <Button
-          variant={isErase ? 'default' : 'outline'}
-          onClick={() => onIsEraseChange(true)}
+          variant={tool === 'eraser' ? 'default' : 'outline'}
+          onClick={() => {
+            onToolChange('eraser')
+            onIsEraseChange(true)
+          }}
           disabled={isPlaying}
           title="Eraser (E)"
         >
           <Eraser className="w-4 h-4 mr-1" />
           <Kbd>E</Kbd>
+        </Button>
+        <Button
+          variant={tool === 'select' ? 'default' : 'outline'}
+          onClick={() => onToolChange('select')}
+          disabled={isPlaying}
+          title="Select (V)"
+        >
+          <MousePointer2 className="w-4 h-4 mr-1" />
+          <Kbd>V</Kbd>
+        </Button>
+        <Button
+          variant={tool === 'picker' ? 'default' : 'outline'}
+          onClick={() => {
+            onToolChange('picker')
+            onIsEraseChange(false)
+          }}
+          disabled={isPlaying}
+          title="Pick Color (X)"
+        >
+          <Pipette className="w-4 h-4 mr-1" />
+          <Kbd>X</Kbd>
         </Button>
       </div>
 
@@ -169,7 +206,7 @@ export function BrushToolbar({
             key={size}
             variant={brushSize === size ? 'default' : 'outline'}
             onClick={() => onBrushSizeChange(size)}
-            disabled={isPlaying}
+            disabled={isPlaying || tool === 'select'}
             className="size-8"
           >
             {size}
