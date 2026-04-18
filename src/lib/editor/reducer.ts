@@ -616,3 +616,20 @@ export function createInitialState(
     paintSessionDirty: false,
   }
 }
+
+export function createStateFromProject(project: Project): EditorReducerState {
+  return {
+    project,
+    editor: {
+      currentFrame: 0,
+      brushSize: 1,
+      selectedColor: '#1e293b',
+      isPlaying: false,
+      tool: 'brush',
+    },
+    history: [],
+    future: [],
+    paintSessionStart: null,
+    paintSessionDirty: false,
+  }
+}

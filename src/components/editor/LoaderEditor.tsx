@@ -10,13 +10,18 @@ import type { ChangeEvent } from 'react'
 import { GridCanvas } from './GridCanvas'
 import { FrameTimeline } from './FrameTimeline'
 import { BrushToolbar } from './BrushToolbar'
-import { editorReducer, createInitialState } from '@/lib/editor/reducer'
+import {
+  editorReducer,
+  createInitialState,
+  createStateFromProject,
+} from '@/lib/editor/reducer'
 import {
   downloadProjectJSON,
   downloadFrameSVG,
   downloadSVG,
   parseProjectJSON,
 } from '@/lib/editor/export'
+import type { Project } from '@/lib/editor/types'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -24,6 +29,14 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import ThemeToggle from '@/components/ThemeToggle'
 import BetterAuthHeader from '#/integrations/better-auth/header-user'
 
@@ -31,16 +44,38 @@ interface LoaderEditorProps {
   initialGridSize?: number
   initialFrameCount?: number
   initialFrameRate?: number
+  initialProject?: Project
+  projects?: Array<{ id: string; name: string }>
+  currentProjectId?: string
+  onProjectSelect?: (projectId: string) => void
+  onProjectChange?: (project: Project) => void
+  saveStatus?: 'idle' | 'saving' | 'saved' | 'error'
+  currentProjectName?: string
+  onAddProject?: (name: string) => void | Promise<void>
+  onDeleteProject?: () => void | Promise<void>
 }
 
 export function LoaderEditor({
   initialGridSize = 7,
   initialFrameCount = 8,
   initialFrameRate = 12,
+  initialProject,
+  projects,
+  currentProjectId,
+  onProjectSelect,
+  onProjectChange,
+  saveStatus,
+  currentProjectName,
+  onAddProject,
+  onDeleteProject,
 }: LoaderEditorProps) {
   const [canvasSize, setCanvasSize] = useState(400)
   const [isErase, setIsErase] = useState(false)
   const importInputRef = useRef<HTMLInputElement>(null)
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
+  const [newProjectName, setNewProjectName] = useState('')
+  const [isProjectActionLoading, setIsProjectActionLoading] = useState(false)
 
   useEffect(() => {
     setCanvasSize(Math.min(500, window.innerWidth - 48))
@@ -54,10 +89,23 @@ export function LoaderEditor({
       frameRate: initialFrameRate,
     },
     (args) =>
-      createInitialState(args.gridSize, args.frameCount, args.frameRate),
+      initialProject
+        ? createStateFromProject(initialProject)
+        : createInitialState(args.gridSize, args.frameCount, args.frameRate),
   )
 
   const { project, editor, history, future } = state
+
+  useEffect(() => {
+    if (!initialProject) return
+    dispatch({ type: 'LOAD_PROJECT', project: initialProject })
+    setIsErase(false)
+  }, [initialProject])
+
+  useEffect(() => {
+    if (!onProjectChange) return
+    onProjectChange(project)
+  }, [onProjectChange, project])
 
   const canUndo = history.length > 0
   const canRedo = future.length > 0
@@ -266,166 +314,376 @@ export function LoaderEditor({
     }
   }
 
-  return (
-    <div className="min-h-screen flex flex-col">
-      <div className="border-b bg-card">
-        <div className="container flex items-center gap-6 py-4 justify-end mx-auto">
-          <input
-            ref={importInputRef}
-            type="file"
-            accept=".json,application/json"
-            className="hidden"
-            onChange={handleImportChange}
-          />
-          <div className="flex items-center gap-4 text-sm">
-            <label className="flex items-center gap-2">
-              Grid:
-              <select
-                value={project.gridSize}
-                onChange={(e) =>
-                  dispatch({
-                    type: 'SET_GRID_SIZE',
-                    gridSize: Number(e.target.value),
-                  })
-                }
-                className="px-2 py-1 rounded border bg-background"
-              >
-                <option value={5}>5x5</option>
-                <option value={7}>7x7</option>
-                <option value={8}>8x8</option>
-                <option value={11}>11x11</option>
-                <option value={16}>16x16</option>
-              </select>
-            </label>
-            <label className="flex items-center gap-2">
-              Frames: {project.frames.length}
-            </label>
-            <label className="flex items-center gap-2">
-              FPS:
-              <input
-                type="number"
-                value={project.frameRate}
-                onChange={(e) =>
-                  dispatch({
-                    type: 'SET_FRAME_RATE',
-                    rate: Math.max(1, Math.min(60, Number(e.target.value))),
-                  })
-                }
-                className="w-16 px-2 py-1 rounded border bg-background"
-                min={1}
-                max={60}
-              />
-            </label>
-            <Button role="button" onClick={handleExport}>
-              Export SVG
-            </Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger render={<Button variant="outline" />}>
-                Project
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={handleExport}>
-                  Export SVG
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={handleExportCurrentFrame}>
-                  Export Current Frame SVG
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={handleExportJSON}>
-                  Export JSON
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={handleImportClick}>
-                  Import JSON
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <ThemeToggle />
-            <div className="w-px h-6 bg-border" />
+  const handleGridSizeChange = (event: ChangeEvent<HTMLSelectElement>) => {
+    dispatch({
+      type: 'SET_GRID_SIZE',
+      gridSize: Number(event.target.value),
+    })
+  }
 
-            <BetterAuthHeader />
+  const handleFrameRateChange = (event: ChangeEvent<HTMLInputElement>) => {
+    dispatch({
+      type: 'SET_FRAME_RATE',
+      rate: Math.max(1, Math.min(60, Number(event.target.value))),
+    })
+  }
+
+  const handleProjectSelect = (projectId: string) => {
+    onProjectSelect?.(projectId)
+  }
+
+  const openAddDialog = () => {
+    setIsAddDialogOpen(true)
+  }
+
+  const openDeleteDialog = () => {
+    setIsDeleteDialogOpen(true)
+  }
+
+  const handleBeginPaintSession = () => {
+    dispatch({ type: 'BEGIN_PAINT_SESSION' })
+  }
+
+  const handleEndPaintSession = () => {
+    dispatch({ type: 'END_PAINT_SESSION' })
+  }
+
+  const handleMoveSelection = (
+    fromRow: number,
+    fromCol: number,
+    toRow: number,
+    toCol: number,
+    deltaRow: number,
+    deltaCol: number,
+  ) => {
+    dispatch({
+      type: 'MOVE_SELECTION',
+      fromRow,
+      fromCol,
+      toRow,
+      toCol,
+      deltaRow,
+      deltaCol,
+    })
+  }
+
+  const handleFrameSelect = (frame: number) => {
+    dispatch({ type: 'SET_CURRENT_FRAME', frame })
+  }
+
+  const handleFrameAdd = (index?: number) => {
+    if (index == null) return
+    dispatch({ type: 'ADD_FRAME', index })
+  }
+
+  const handleFrameDelete = (frame: number) => {
+    dispatch({ type: 'DELETE_FRAME', frame })
+  }
+
+  const handleToolChange = (
+    tool: 'brush' | 'eraser' | 'select' | 'picker' | 'fill',
+  ) => {
+    dispatch({ type: 'SET_TOOL', tool })
+    if (tool === 'brush') setIsErase(false)
+    if (tool === 'eraser') setIsErase(true)
+    if (tool === 'fill') setIsErase(false)
+  }
+
+  const handleBrushSizeChange = (size: 1 | 3) => {
+    dispatch({ type: 'SET_BRUSH_SIZE', size })
+  }
+
+  const handleColorChange = (color: string) => {
+    dispatch({ type: 'SET_COLOR', color })
+  }
+
+  const handleCloneFrame = (source: number) => {
+    dispatch({
+      type: 'CLONE_FRAME',
+      source,
+      target: editor.currentFrame,
+      merge: false,
+    })
+  }
+
+  const handleClearFrame = () => {
+    dispatch({ type: 'CLEAR_FRAME', frame: editor.currentFrame })
+  }
+
+  const handleTogglePlaying = () => {
+    dispatch({ type: 'TOGGLE_PLAYING' })
+  }
+
+  const handleUndo = () => {
+    dispatch({ type: 'UNDO' })
+  }
+
+  const handleRedo = () => {
+    dispatch({ type: 'REDO' })
+  }
+
+  const handleAddDialogChange = (open: boolean) => {
+    setIsAddDialogOpen(open)
+  }
+
+  const handleDeleteDialogChange = (open: boolean) => {
+    setIsDeleteDialogOpen(open)
+  }
+
+  const handleNewProjectNameChange = (event: ChangeEvent<HTMLInputElement>) => {
+    setNewProjectName(event.target.value)
+  }
+
+  const handleAddProjectCancel = () => {
+    setIsAddDialogOpen(false)
+    setNewProjectName('')
+  }
+
+  const handleDeleteProjectCancel = () => {
+    setIsDeleteDialogOpen(false)
+  }
+
+  const handleAddProjectConfirm = () => {
+    if (!onAddProject) return
+    const name = newProjectName.trim()
+    if (!name) return
+    setIsProjectActionLoading(true)
+    void Promise.resolve(onAddProject(name)).finally(() => {
+      setIsProjectActionLoading(false)
+      setIsAddDialogOpen(false)
+      setNewProjectName('')
+    })
+  }
+
+  const handleDeleteProjectConfirm = () => {
+    if (!onDeleteProject) return
+    setIsProjectActionLoading(true)
+    void Promise.resolve(onDeleteProject()).finally(() => {
+      setIsProjectActionLoading(false)
+      setIsDeleteDialogOpen(false)
+    })
+  }
+
+  return (
+    <>
+      <div className="min-h-screen flex flex-col">
+        <div className="border-b bg-card">
+          <div className="container flex items-center justify-between gap-6 py-4 mx-auto">
+            <div className="min-w-0">
+              {currentProjectName ? (
+                <h1 className="text-md font-semibold truncate">
+                  {currentProjectName}
+                </h1>
+              ) : (
+                <h1 className="text-sm font-semibold">Untitled Project</h1>
+              )}
+            </div>
+            {saveStatus && (
+              <span className="text-xs text-muted-foreground text-left inline-block min-w-10">
+                {saveStatus === 'saving' && 'Saving...'}
+                {saveStatus === 'saved' && 'Saved'}
+                {saveStatus === 'error' && 'Save failed'}
+              </span>
+            )}
+            <input
+              ref={importInputRef}
+              type="file"
+              accept=".json,application/json"
+              className="hidden"
+              onChange={handleImportChange}
+            />
+            <div className="flex items-center gap-4 text-sm">
+              <label className="flex items-center gap-2">
+                Grid:
+                <select
+                  value={project.gridSize}
+                  onChange={handleGridSizeChange}
+                  className="px-2 py-1 border bg-background"
+                >
+                  <option value={5}>5x5</option>
+                  <option value={7}>7x7</option>
+                  <option value={8}>8x8</option>
+                  <option value={11}>11x11</option>
+                  <option value={16}>16x16</option>
+                </select>
+              </label>
+              <label className="flex items-center gap-2">
+                Frames: {project.frames.length}
+              </label>
+              <label className="flex items-center gap-2">
+                FPS:
+                <input
+                  type="number"
+                  value={project.frameRate}
+                  onChange={handleFrameRateChange}
+                  className="w-16 px-2 py-1 border bg-background"
+                  min={1}
+                  max={60}
+                />
+              </label>
+              <Button role="button" onClick={handleExport}>
+                Export SVG
+              </Button>
+              {projects && projects.length > 0 && onProjectSelect && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger render={<Button variant="outline" />}>
+                    Projects
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    {projects.map((entry) => (
+                      <DropdownMenuItem
+                        key={entry.id}
+                        onClick={() => handleProjectSelect(entry.id)}
+                        disabled={entry.id === currentProjectId}
+                      >
+                        {entry.name}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+              <DropdownMenu>
+                <DropdownMenuTrigger render={<Button variant="outline" />}>
+                  More
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {onAddProject && (
+                    <DropdownMenuItem onClick={openAddDialog}>
+                      New Project
+                    </DropdownMenuItem>
+                  )}
+                  {onDeleteProject && (
+                    <DropdownMenuItem
+                      onClick={openDeleteDialog}
+                      disabled={!projects || projects.length <= 1}
+                    >
+                      Delete Project
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem onClick={handleExportCurrentFrame}>
+                    Export Current Frame SVG
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleExportJSON}>
+                    Export JSON
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleImportClick}>
+                    Import JSON
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <ThemeToggle />
+              <div className="w-px h-6 bg-border" />
+
+              <BetterAuthHeader />
+            </div>
           </div>
         </div>
+
+        <main className="flex-1 flex flex-col items-center justify-center p-6 gap-6">
+          <GridCanvas
+            grid={currentFrame.grid}
+            brushSize={editor.brushSize}
+            isErase={isErase}
+            isPlaying={editor.isPlaying}
+            tool={editor.tool}
+            onCellPaint={handlePaint}
+            onCellFill={handleFill}
+            onCellPick={handlePick}
+            onPaintSessionStart={handleBeginPaintSession}
+            onPaintSessionEnd={handleEndPaintSession}
+            onMoveSelection={handleMoveSelection}
+            canvasSize={canvasSize}
+          />
+
+          <FrameTimeline
+            frames={project.frames}
+            currentFrame={editor.currentFrame}
+            onFrameSelect={handleFrameSelect}
+            onFrameAdd={handleFrameAdd}
+            onFrameDelete={handleFrameDelete}
+          />
+
+          <BrushToolbar
+            tool={editor.tool}
+            brushSize={editor.brushSize}
+            selectedColor={editor.selectedColor}
+            isPlaying={editor.isPlaying}
+            frameCount={project.frames.length}
+            currentFrame={editor.currentFrame}
+            usedColors={usedColors}
+            canUndo={canUndo}
+            canRedo={canRedo}
+            onToolChange={handleToolChange}
+            onBrushSizeChange={handleBrushSizeChange}
+            onColorChange={handleColorChange}
+            onIsEraseChange={setIsErase}
+            onCloneFrame={handleCloneFrame}
+            onClearFrame={handleClearFrame}
+            onTogglePlaying={handleTogglePlaying}
+            onUndo={handleUndo}
+            onRedo={handleRedo}
+          />
+        </main>
       </div>
 
-      <main className="flex-1 flex flex-col items-center justify-center p-6 gap-6">
-        <GridCanvas
-          grid={currentFrame.grid}
-          brushSize={editor.brushSize}
-          isErase={isErase}
-          isPlaying={editor.isPlaying}
-          tool={editor.tool}
-          onCellPaint={handlePaint}
-          onCellFill={handleFill}
-          onCellPick={handlePick}
-          onPaintSessionStart={() => dispatch({ type: 'BEGIN_PAINT_SESSION' })}
-          onPaintSessionEnd={() => dispatch({ type: 'END_PAINT_SESSION' })}
-          onMoveSelection={(
-            fromRow,
-            fromCol,
-            toRow,
-            toCol,
-            deltaRow,
-            deltaCol,
-          ) =>
-            dispatch({
-              type: 'MOVE_SELECTION',
-              fromRow,
-              fromCol,
-              toRow,
-              toCol,
-              deltaRow,
-              deltaCol,
-            })
-          }
-          canvasSize={canvasSize}
-        />
+      <Dialog open={isAddDialogOpen} onOpenChange={handleAddDialogChange}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create project</DialogTitle>
+            <DialogDescription>
+              Enter a name for your new project.
+            </DialogDescription>
+          </DialogHeader>
+          <input
+            value={newProjectName}
+            onChange={handleNewProjectNameChange}
+            placeholder="My loader"
+            className="flex h-9 w-full border border-input bg-background px-3 py-1 text-sm shadow-xs"
+          />
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={handleAddProjectCancel}
+              disabled={isProjectActionLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleAddProjectConfirm}
+              disabled={isProjectActionLoading || !newProjectName.trim()}
+            >
+              {isProjectActionLoading ? 'Creating...' : 'Create'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-        <FrameTimeline
-          frames={project.frames}
-          currentFrame={editor.currentFrame}
-          onFrameSelect={(frame) =>
-            dispatch({ type: 'SET_CURRENT_FRAME', frame })
-          }
-          onFrameAdd={(index) => dispatch({ type: 'ADD_FRAME', index })}
-          onFrameDelete={(frame) => dispatch({ type: 'DELETE_FRAME', frame })}
-        />
-
-        <BrushToolbar
-          tool={editor.tool}
-          brushSize={editor.brushSize}
-          selectedColor={editor.selectedColor}
-          isPlaying={editor.isPlaying}
-          frameCount={project.frames.length}
-          currentFrame={editor.currentFrame}
-          usedColors={usedColors}
-          canUndo={canUndo}
-          canRedo={canRedo}
-          onToolChange={(tool) => {
-            dispatch({ type: 'SET_TOOL', tool })
-            if (tool === 'brush') setIsErase(false)
-            if (tool === 'eraser') setIsErase(true)
-            if (tool === 'fill') setIsErase(false)
-          }}
-          onBrushSizeChange={(size) =>
-            dispatch({ type: 'SET_BRUSH_SIZE', size })
-          }
-          onColorChange={(color) => dispatch({ type: 'SET_COLOR', color })}
-          onIsEraseChange={setIsErase}
-          onCloneFrame={(source) =>
-            dispatch({
-              type: 'CLONE_FRAME',
-              source,
-              target: editor.currentFrame,
-              merge: false,
-            })
-          }
-          onClearFrame={() =>
-            dispatch({ type: 'CLEAR_FRAME', frame: editor.currentFrame })
-          }
-          onTogglePlaying={() => dispatch({ type: 'TOGGLE_PLAYING' })}
-          onUndo={() => dispatch({ type: 'UNDO' })}
-          onRedo={() => dispatch({ type: 'REDO' })}
-        />
-      </main>
-    </div>
+      <Dialog open={isDeleteDialogOpen} onOpenChange={handleDeleteDialogChange}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete project</DialogTitle>
+            <DialogDescription>
+              This will permanently delete this project. This action cannot be
+              undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={handleDeleteProjectCancel}
+              disabled={isProjectActionLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleDeleteProjectConfirm}
+              disabled={isProjectActionLoading}
+            >
+              {isProjectActionLoading ? 'Deleting...' : 'Delete'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }

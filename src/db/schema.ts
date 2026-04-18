@@ -1,5 +1,13 @@
-import { pgTable, text, timestamp, boolean, index } from 'drizzle-orm/pg-core'
+import {
+  pgTable,
+  text,
+  timestamp,
+  boolean,
+  index,
+  jsonb,
+} from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
+import type { Project as EditorProject } from '#/lib/editor/types'
 
 export const user = pgTable('user', {
   id: text('id').primaryKey(),
@@ -73,9 +81,28 @@ export const verification = pgTable(
   (table) => [index('verification_identifier_idx').on(table.identifier)],
 )
 
+export const loaderProject = pgTable(
+  'loader_project',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    data: jsonb('data').$type<EditorProject>().notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at')
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [index('loader_project_userId_idx').on(table.userId)],
+)
+
 export const userRelations = relations(user, ({ many }) => ({
   sessions: many(session),
   accounts: many(account),
+  loaderProjects: many(loaderProject),
 }))
 
 export const sessionRelations = relations(session, ({ one }) => ({
@@ -88,6 +115,13 @@ export const sessionRelations = relations(session, ({ one }) => ({
 export const accountRelations = relations(account, ({ one }) => ({
   user: one(user, {
     fields: [account.userId],
+    references: [user.id],
+  }),
+}))
+
+export const loaderProjectRelations = relations(loaderProject, ({ one }) => ({
+  user: one(user, {
+    fields: [loaderProject.userId],
     references: [user.id],
   }),
 }))

@@ -1,9 +1,14 @@
 import { Button } from '#/components/ui/button'
 import { authClient } from '#/lib/auth-client'
-import { Link } from '@tanstack/react-router'
+import { Link, useNavigate } from '@tanstack/react-router'
 
 export default function BetterAuthHeader() {
+  const navigate = useNavigate()
   const { data: session, isPending } = authClient.useSession()
+  const logout = async () => {
+    await authClient.signOut()
+    void navigate({ to: '/editor' })
+  }
 
   if (isPending) {
     return (
@@ -27,12 +32,7 @@ export default function BetterAuthHeader() {
             </span>
           </div>
         )}
-        <Button
-          variant="outline"
-          onClick={() => {
-            void authClient.signOut()
-          }}
-        >
+        <Button variant="outline" onClick={logout}>
           Sign out
         </Button>
       </div>
@@ -40,11 +40,6 @@ export default function BetterAuthHeader() {
   }
 
   return (
-    <Link
-      to="/login"
-      className="h-9 px-4 text-sm font-medium bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-50 border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors inline-flex items-center"
-    >
-      Sign in
-    </Link>
+    <Button variant={'outline'} render={<Link to="/login">Sign in</Link>} />
   )
 }

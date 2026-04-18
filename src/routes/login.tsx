@@ -57,19 +57,6 @@ function LoginPage() {
           >
             Sign out
           </button>
-
-          <p className="text-xs text-center text-neutral-400 dark:text-neutral-500">
-            Built with{' '}
-            <a
-              href="https://better-auth.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="font-medium hover:text-neutral-600 dark:hover:text-neutral-300"
-            >
-              BETTER-AUTH
-            </a>
-            .
-          </p>
         </div>
       </div>
     )
@@ -90,26 +77,13 @@ function LoginPage() {
           onClick={() => {
             void authClient.signIn.social({
               provider: 'google',
-              callbackURL: '/login',
+              callbackURL: '/editor',
             })
           }}
           className="w-full h-9 px-4 text-sm font-medium border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
         >
           Continue with Google
         </button>
-
-        <p className="mt-6 text-xs text-center text-neutral-400 dark:text-neutral-500">
-          Built with{' '}
-          <a
-            href="https://better-auth.com"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="font-medium hover:text-neutral-600 dark:hover:text-neutral-300"
-          >
-            BETTER-AUTH
-          </a>
-          .
-        </p>
       </div>
     </div>
   )

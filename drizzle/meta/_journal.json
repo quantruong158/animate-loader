@@ -15,6 +15,13 @@
       "when": 1776510784630,
       "tag": "0001_chilly_wendell_vaughn",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1776514678457,
+      "tag": "0002_spotty_komodo",
+      "breakpoints": true
     }
   ]
 }
