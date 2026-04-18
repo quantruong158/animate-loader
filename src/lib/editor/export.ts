@@ -26,12 +26,17 @@ function readPositiveNumber(value: unknown): number | null {
 }
 
 function normalizeFrame(frame: unknown, gridSize: number): Frame {
-  if (!isRecord(frame) || !isRecord(frame.grid) || !Array.isArray(frame.grid.cells)) {
+  if (!isRecord(frame) || !isRecord(frame.grid)) {
+    return createEmptyFrame(gridSize)
+  }
+
+  const gridCells = frame.grid.cells
+  if (!Array.isArray(gridCells)) {
     return createEmptyFrame(gridSize)
   }
 
   const cells = Array.from({ length: gridSize }, (_, rowIndex) => {
-    const row = frame.grid.cells[rowIndex]
+    const row = gridCells[rowIndex]
     if (!Array.isArray(row)) {
       return Array.from({ length: gridSize }, () => 'transparent')
     }
@@ -51,13 +56,16 @@ function normalizeFrame(frame: unknown, gridSize: number): Frame {
 }
 
 function normalizeProject(value: unknown): Project {
-  const projectData = isRecord(value) && isRecord(value.project) ? value.project : value
+  const projectData =
+    isRecord(value) && isRecord(value.project) ? value.project : value
 
   if (!isRecord(projectData)) {
     throw new Error('Invalid project JSON: expected an object')
   }
 
-  const framesValue = Array.isArray(projectData.frames) ? projectData.frames : []
+  const framesValue = Array.isArray(projectData.frames)
+    ? projectData.frames
+    : []
   const inferredGridSize =
     readPositiveInteger(projectData.gridSize) ??
     (framesValue.length > 0 &&
@@ -109,7 +117,10 @@ function downloadBlob(blob: Blob, filename: string) {
   URL.revokeObjectURL(url)
 }
 
-export function downloadProjectJSON(project: Project, filename = 'loader.json') {
+export function downloadProjectJSON(
+  project: Project,
+  filename = 'loader.json',
+) {
   const json = exportProjectJSON(project)
   downloadBlob(new Blob([json], { type: 'application/json' }), filename)
 }
@@ -120,56 +131,75 @@ export function exportSVG(project: Project): string {
   const svgSize = gridSize * cellSize
   const totalDuration = frameCount / frameRate
 
+  const formatPercent = (value: number): string => {
+    const rounded = Number(value.toFixed(4))
+    return Number.isInteger(rounded) ? `${rounded}` : `${rounded}`
+  }
+
   const styleBlocks: string[] = []
+  const animationByTimeline = new Map<string, string>()
+  let animationCounter = 0
   const rects: string[] = []
 
   for (let r = 0; r < gridSize; r++) {
     for (let c = 0; c < gridSize; c++) {
-      const colors: (string | null)[] = []
+      const colors: string[] = []
       for (let f = 0; f < frameCount; f++) {
         const cell = frames[f].grid.cells[r][c]
-        colors.push(cell === 'transparent' ? null : cell)
+        colors.push(cell === 'transparent' ? 'none' : cell)
       }
 
-      if (colors.every((col) => col === null)) continue
+      if (colors.every((col) => col === 'none')) continue
 
       const x = c * cellSize
       const y = r * cellSize
-      const animId = `a${r}_${c}`
 
-      const keyTimes = Array.from(
-        { length: frameCount },
-        (_, i) => i / frameCount,
-      )
-      const fillValues = colors.map((col) => col || 'none')
-      const opacityValues = colors.map((col) => (col !== null ? '1' : '0'))
+      const runs: Array<{ startFrame: number; color: string }> = [
+        { startFrame: 0, color: colors[0] },
+      ]
 
-      const fallbackFill = colors.find((col) => col !== null) || '#000000'
+      for (let f = 1; f < frameCount; f++) {
+        if (colors[f] !== colors[f - 1]) {
+          runs.push({ startFrame: f, color: colors[f] })
+        }
+      }
 
-      const fillFrames = keyTimes
-        .map(
-          (t, i) => `${(t * 100).toFixed(4)}% { fill: ${fillValues[i]}; }`,
+      if (runs.length === 1) {
+        rects.push(
+          `<rect x="${x}" y="${y}" width="${cellSize}" height="${cellSize}" fill="${runs[0].color}"/>`,
         )
-        .join(' ')
-      const opacityFrames = keyTimes
-        .map(
-          (t, i) => `${(t * 100).toFixed(4)}% { opacity: ${opacityValues[i]}; }`,
-        )
-        .join(' ')
+        continue
+      }
 
-      styleBlocks.push(
-        `@keyframes ${animId}_fill { ${fillFrames} }`,
-        `@keyframes ${animId}_opacity { ${opacityFrames} }`,
-      )
+      const timelineKey = runs
+        .map((run) => `${run.startFrame}:${run.color}`)
+        .join(';')
+
+      let animationName = animationByTimeline.get(timelineKey)
+      if (!animationName) {
+        animationName = `k${animationCounter++}`
+        const keyframes = runs
+          .map((run) => {
+            const t = (run.startFrame * 100) / frameCount
+            return `${formatPercent(t)}%{fill:${run.color}}`
+          })
+          .join('')
+
+        const lastColor = runs[runs.length - 1].color
+        styleBlocks.push(
+          `@keyframes ${animationName}{${keyframes}100%{fill:${lastColor}}}`,
+        )
+        animationByTimeline.set(timelineKey, animationName)
+      }
 
       rects.push(
-        `<rect x="${x}" y="${y}" width="${cellSize}" height="${cellSize}" fill="${fallbackFill}" style="animation: ${animId}_fill ${totalDuration}s step-end infinite, ${animId}_opacity ${totalDuration}s step-end infinite;"/>`,
+        `<rect x="${x}" y="${y}" width="${cellSize}" height="${cellSize}" fill="${runs[0].color}" style="animation:${animationName} ${totalDuration}s step-end infinite"/>`,
       )
     }
   }
 
-  const styleContent = styleBlocks.join('\n')
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${svgSize} ${svgSize}" width="${svgSize}" height="${svgSize}">\n<style>\n${styleContent}\n</style>\n${rects.join('\n')}\n</svg>`
+  const styleContent = styleBlocks.join('')
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${svgSize} ${svgSize}" width="${svgSize}" height="${svgSize}"><style>${styleContent}</style>${rects.join('')}</svg>`
 }
 
 export function downloadSVG(project: Project, filename = 'loader.svg') {

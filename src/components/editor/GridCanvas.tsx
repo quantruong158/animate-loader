@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
-import { getBrushCells, type Grid } from '@/lib/editor/types'
+import { getBrushCells  } from '@/lib/editor/types'
+import type {Grid} from '@/lib/editor/types';
 
 interface GridCanvasProps {
   grid: Grid
