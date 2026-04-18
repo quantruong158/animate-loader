@@ -131,23 +131,26 @@ export function editorReducer(
     }
     case 'ADD_FRAME': {
       if (project.frames.length >= 64) return state
-      const newFrames = [
-        ...project.frames,
-        {
-          grid: {
-            size: project.gridSize,
-            cells: Array.from({ length: project.gridSize }, () =>
-              Array(project.gridSize).fill('transparent'),
-            ),
-          },
+      const blankFrame = {
+        grid: {
+          size: project.gridSize,
+          cells: Array.from({ length: project.gridSize }, () =>
+            Array(project.gridSize).fill('transparent'),
+          ),
         },
+      }
+      const insertIndex = action.index ?? project.frames.length
+      const newFrames = [
+        ...project.frames.slice(0, insertIndex),
+        blankFrame,
+        ...project.frames.slice(insertIndex),
       ]
       const newProject = {
         ...project,
         frames: newFrames,
         frameCount: newFrames.length,
       }
-      const newEditor = { ...editor, currentFrame: newFrames.length - 1 }
+      const newEditor = { ...editor, currentFrame: insertIndex }
       return {
         project: newProject,
         editor: newEditor,

@@ -299,7 +299,7 @@ export function LoaderEditor({
           onFrameSelect={(frame) =>
             dispatch({ type: 'SET_CURRENT_FRAME', frame })
           }
-          onFrameAdd={() => dispatch({ type: 'ADD_FRAME' })}
+          onFrameAdd={(index) => dispatch({ type: 'ADD_FRAME', index })}
           onFrameDelete={(frame) => dispatch({ type: 'DELETE_FRAME', frame })}
         />
 
