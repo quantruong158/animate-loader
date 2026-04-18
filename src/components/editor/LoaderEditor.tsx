@@ -1,10 +1,28 @@
-import { useEffect, useReducer, useCallback, useMemo, useState } from 'react'
+import {
+  useEffect,
+  useReducer,
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
+import type { ChangeEvent } from 'react'
 import { GridCanvas } from './GridCanvas'
 import { FrameTimeline } from './FrameTimeline'
 import { BrushToolbar } from './BrushToolbar'
 import { editorReducer, createInitialState } from '@/lib/editor/reducer'
-import { downloadSVG } from '@/lib/editor/export'
+import {
+  downloadProjectJSON,
+  downloadSVG,
+  parseProjectJSON,
+} from '@/lib/editor/export'
 import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import ThemeToggle from '@/components/ThemeToggle'
 
 interface LoaderEditorProps {
@@ -20,6 +38,7 @@ export function LoaderEditor({
 }: LoaderEditorProps) {
   const [canvasSize, setCanvasSize] = useState(400)
   const [isErase, setIsErase] = useState(false)
+  const importInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     setCanvasSize(Math.min(500, window.innerWidth - 48))
@@ -165,10 +184,43 @@ export function LoaderEditor({
     downloadSVG(project)
   }
 
+  const handleExportJSON = () => {
+    downloadProjectJSON(project)
+  }
+
+  const handleImportClick = () => {
+    importInputRef.current?.click()
+  }
+
+  const handleImportChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+
+    if (!file) return
+
+    try {
+      const json = await file.text()
+      const importedProject = parseProjectJSON(json)
+      dispatch({ type: 'LOAD_PROJECT', project: importedProject })
+      setIsErase(false)
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Failed to import project JSON'
+      window.alert(message)
+    }
+  }
+
   return (
     <div className="min-h-screen flex flex-col">
       <div className="border-b bg-card">
         <div className="container flex items-center gap-6 py-4 justify-end mx-auto">
+          <input
+            ref={importInputRef}
+            type="file"
+            accept=".json,application/json"
+            className="hidden"
+            onChange={handleImportChange}
+          />
           <div className="flex items-center gap-4 text-sm">
             <label className="flex items-center gap-2">
               Grid:
@@ -208,9 +260,25 @@ export function LoaderEditor({
                 max={60}
               />
             </label>
-            <Button onClick={handleExport} size="sm">
+            <Button role="button" onClick={handleExport}>
               Export SVG
             </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger render={<Button variant="outline" />}>
+                Project
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={handleExport}>
+                  Export SVG
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleExportJSON}>
+                  Export JSON
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleImportClick}>
+                  Import JSON
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <ThemeToggle />
           </div>
         </div>

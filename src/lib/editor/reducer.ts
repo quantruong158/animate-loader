@@ -11,6 +11,7 @@ export interface EditorAction {
     | 'DELETE_FRAME'
     | 'SET_GRID_SIZE'
     | 'SET_FRAME_RATE'
+    | 'LOAD_PROJECT'
     | 'CLONE_FRAME'
     | 'CLEAR_FRAME'
     | 'TOGGLE_PLAYING'
@@ -23,6 +24,7 @@ export interface EditorAction {
   brushSize?: 1 | 3
   gridSize?: number
   frame?: number
+  project?: Project
   source?: number
   target?: number
   merge?: boolean
@@ -195,6 +197,20 @@ export function editorReducer(
         project: newProject,
         editor,
         history: [...history, current],
+        future: [],
+      }
+    }
+    case 'LOAD_PROJECT': {
+      if (action.project == null) return state
+      return {
+        project: action.project,
+        editor: {
+          currentFrame: 0,
+          brushSize: 1,
+          selectedColor: '#1e293b',
+          isPlaying: false,
+        },
+        history: [],
         future: [],
       }
     }
