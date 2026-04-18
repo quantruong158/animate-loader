@@ -82,9 +82,7 @@ export default function ThemeToggle() {
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger
-        render={<Button variant="ghost" size="sm" title={label} />}
-      >
+      <DropdownMenuTrigger render={<Button variant="outline" title={label} />}>
         {icon}
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">

@@ -25,6 +25,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import ThemeToggle from '@/components/ThemeToggle'
+import BetterAuthHeader from '#/integrations/better-auth/header-user'
 
 interface LoaderEditorProps {
   initialGridSize?: number
@@ -338,6 +339,9 @@ export function LoaderEditor({
               </DropdownMenuContent>
             </DropdownMenu>
             <ThemeToggle />
+            <div className="w-px h-6 bg-border" />
+
+            <BetterAuthHeader />
           </div>
         </div>
       </div>
