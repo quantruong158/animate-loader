@@ -8,7 +8,8 @@ import {
   getProjectById,
   saveUserProject,
 } from '#/lib/editor/projects.functions'
-import { createProject, type Project } from '#/lib/editor/types'
+import { createProject } from '#/lib/editor/types'
+import type { Project } from '#/lib/editor/types'
 
 export const Route = createFileRoute('/editor/$projectId')({
   pendingComponent: () => (
@@ -150,7 +151,7 @@ function ProjectEditorPage() {
         if (currentIndex > 0 && projects[currentIndex - 1]) {
           await navigate({
             to: '/editor/$projectId',
-            params: { projectId: projects[currentIndex - 1]!.id },
+            params: { projectId: projects[currentIndex - 1].id },
           })
           return
         }

@@ -39,7 +39,10 @@ function normalizeFrame(frame: unknown, gridSize: number): Frame {
   for (let rowIndex = 0; rowIndex < gridSize; rowIndex++) {
     const row = gridCells[rowIndex]
     if (!Array.isArray(row)) {
-      const newRow: Cell[] = Array.from({ length: gridSize }, () => 'transparent')
+      const newRow: Cell[] = Array.from(
+        { length: gridSize },
+        () => 'transparent',
+      )
       cells.push(newRow)
     } else {
       const newRow: Cell[] = []
@@ -83,7 +86,10 @@ function normalizeProject(value: unknown): Project {
 
   const gridSize = inferredGridSize
   const frameRate = readPositiveNumber(projectData.frameRate) ?? 12
-  const gapSize = typeof projectData.gapSize === 'number' ? Math.max(0, Math.min(8, projectData.gapSize)) : 0
+  const gapSize =
+    typeof projectData.gapSize === 'number'
+      ? Math.max(0, Math.min(8, projectData.gapSize))
+      : 0
   const frames = framesValue.map((frame) => normalizeFrame(frame, gridSize))
 
   return {
@@ -161,9 +167,11 @@ export function exportSVG(project: Project): string {
       const x = c * (cellSize + gapSize)
       const y = r * (cellSize + gapSize)
 
-      const runs: Array<{ startFrame: number; color: string; shape: 'square' | 'circle' }> = [
-        { startFrame: 0, color: colors[0], shape: shapes[0] },
-      ]
+      const runs: Array<{
+        startFrame: number
+        color: string
+        shape: 'square' | 'circle'
+      }> = [{ startFrame: 0, color: colors[0], shape: shapes[0] }]
 
       for (let f = 1; f < frameCount; f++) {
         if (colors[f] !== colors[f - 1] || shapes[f] !== shapes[f - 1]) {
@@ -256,7 +264,11 @@ export function exportFrameSVG(frame: Frame, gapSize = 0): string {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${svgSize} ${svgSize}" width="${svgSize}" height="${svgSize}">${rects.join('')}</svg>`
 }
 
-export function downloadFrameSVG(frame: Frame, filename = 'frame.svg', gapSize = 0) {
+export function downloadFrameSVG(
+  frame: Frame,
+  filename = 'frame.svg',
+  gapSize = 0,
+) {
   const svg = exportFrameSVG(frame, gapSize)
   downloadBlob(new Blob([svg], { type: 'image/svg+xml' }), filename)
 }

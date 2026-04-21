@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from 'react'
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { getBrushCells } from '@/lib/editor/types'
 import type { Grid, Cell } from '@/lib/editor/types'
 
@@ -55,6 +55,7 @@ function getCellsBetween(
   let r = r1
   let c = c1
 
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
   while (true) {
     cells.push([r, c])
     if (r === r2 && c === c2) break
@@ -422,7 +423,13 @@ export function GridCanvas({
       return
     }
     const cell = getCellFromEvent(e)
-    setHoverCell(cell)
+
+    setHoverCell((prev) => {
+      if (!prev && !cell) return prev
+      if (prev && cell && prev[0] === cell[0] && prev[1] === cell[1])
+        return prev
+      return cell
+    })
 
     if (tool === 'select') {
       if (isSelecting && cell && selectionAnchorRef.current) {
@@ -494,47 +501,65 @@ export function GridCanvas({
         : 'cursor-default'
       : 'cursor-crosshair'
 
-  const cellPos = (row: number, col: number) => ({
-    x: col * (cellSize + gapSize),
-    y: row * (cellSize + gapSize),
-  })
+  const cellPos = useCallback(
+    (row: number, col: number) => ({
+      x: col * (cellSize + gapSize),
+      y: row * (cellSize + gapSize),
+    }),
+    [cellSize, gapSize],
+  )
 
-  const renderCellShape = (
-    row: number,
-    col: number,
-    cell: Cell,
-    key: string,
-    extraProps?: Record<string, unknown>,
-  ) => {
-    if (cell === 'transparent') return null
-    const { x, y } = cellPos(row, col)
-    const shape = cell.shape
+  const staticCellsLayer = useMemo(() => {
+    return grid.cells.map((row, r) =>
+      row.map((cell, c) => {
+        const { x, y } = cellPos(r, c)
 
-    if (shape === 'circle') {
-      return (
-        <circle
-          key={key}
-          cx={x + cellSize / 2}
-          cy={y + cellSize / 2}
-          r={cellSize / 2}
-          fill={cell.color}
-          {...extraProps}
-        />
-      )
-    }
+        if (cell === 'transparent') {
+          return (
+            <g key={`${r}-${c}`}>
+              <rect
+                x={x}
+                y={y}
+                width={cellSize}
+                height={cellSize}
+                fill="transparent"
+                stroke={isPlaying ? 'none' : 'var(--ring)'}
+                strokeWidth={0.5}
+              />
+            </g>
+          )
+        }
 
-    return (
-      <rect
-        key={key}
-        x={x}
-        y={y}
-        width={cellSize}
-        height={cellSize}
-        fill={cell.color}
-        {...extraProps}
-      />
+        const shape = cell.shape
+        if (shape === 'circle') {
+          return (
+            <g key={`${r}-${c}`}>
+              <circle
+                cx={x + cellSize / 2}
+                cy={y + cellSize / 2}
+                r={cellSize / 2}
+                fill={cell.color}
+                stroke="none"
+              />
+            </g>
+          )
+        }
+
+        return (
+          <g key={`${r}-${c}`}>
+            <rect
+              x={x}
+              y={y}
+              width={cellSize}
+              height={cellSize}
+              fill={cell.color}
+              stroke="none"
+            />
+          </g>
+        )
+      }),
     )
-  }
+  }, [grid.cells, cellSize, gapSize, isPlaying, cellPos])
 
   return (
     <svg
@@ -556,30 +581,7 @@ export function GridCanvas({
         fill={canvasBg === 'white' ? '#ffffff' : 'transparent'}
       />
 
-      {grid.cells.map((row, r) =>
-        row.map((cell, c) => {
-          const { x, y } = cellPos(r, c)
-          return (
-            <g key={`${r}-${c}`}>
-              {cell === 'transparent' ? (
-                <rect
-                  x={x}
-                  y={y}
-                  width={cellSize}
-                  height={cellSize}
-                  fill="transparent"
-                  stroke={isPlaying ? 'none' : 'var(--ring)'}
-                  strokeWidth={0.5}
-                />
-              ) : (
-                renderCellShape(r, c, cell, `${r}-${c}`, {
-                  stroke: 'none',
-                })
-              )}
-            </g>
-          )
-        }),
-      )}
+      {staticCellsLayer}
 
       {hoverCells.map(([r, c]) => {
         const { x, y } = cellPos(r, c)

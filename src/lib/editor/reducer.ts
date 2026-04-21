@@ -1,5 +1,11 @@
-import type { Project, EditorState, HistoryState, Cell, CellShape } from './types'
-import { cloneFrame, createProject, getBrushCells, migrateCell } from './types'
+import type {
+  Project,
+  EditorState,
+  HistoryState,
+  Cell,
+  CellShape,
+} from './types'
+import { createProject, getBrushCells, migrateCell } from './types'
 
 export interface EditorAction {
   type:
@@ -57,25 +63,15 @@ function paintCell(
   cell: Cell,
   brushSize: 1 | 3,
 ) {
-  const newFrames = frames.map((f, i) => {
-    if (i !== currentFrame) return f
-    return {
-      grid: {
-        size: f.grid.size,
-        cells: f.grid.cells.map((r) => [...r]),
-      },
-    }
-  })
-
-  let changed = false
-  const gridSize = newFrames[currentFrame].grid.size
+  const gridSize = frames[currentFrame].grid.size
   const cells = getBrushCells(row, col, brushSize, gridSize)
+
+  const rowsToChange = new Set<number>()
   for (const [r, c] of cells) {
-    const existing = newFrames[currentFrame].grid.cells[r][c]
+    const existing = frames[currentFrame].grid.cells[r][c]
     if (cell === 'transparent') {
       if (existing !== 'transparent') {
-        changed = true
-        newFrames[currentFrame].grid.cells[r][c] = 'transparent'
+        rowsToChange.add(r)
       }
     } else {
       if (
@@ -83,13 +79,34 @@ function paintCell(
         existing.color !== cell.color ||
         existing.shape !== cell.shape
       ) {
-        changed = true
-        newFrames[currentFrame].grid.cells[r][c] = cell
+        rowsToChange.add(r)
       }
     }
   }
 
-  return { frames: newFrames, changed }
+  if (rowsToChange.size === 0) {
+    return { frames, changed: false }
+  }
+
+  const newFrames = frames.map((f, i) => {
+    if (i !== currentFrame) return f
+    return {
+      grid: {
+        size: f.grid.size,
+        cells: f.grid.cells.map((r, rowIndex) =>
+          rowsToChange.has(rowIndex) ? [...r] : r,
+        ),
+      },
+    }
+  })
+
+  for (const [r, c] of cells) {
+    if (rowsToChange.has(r)) {
+      newFrames[currentFrame].grid.cells[r][c] = cell
+    }
+  }
+
+  return { frames: newFrames, changed: true }
 }
 
 function fillCell(
@@ -99,46 +116,39 @@ function fillCell(
   col: number,
   color: string,
 ) {
-  const newFrames = frames.map((f, i) => {
-    if (i !== currentFrame) return f
-    return {
-      grid: {
-        size: f.grid.size,
-        cells: f.grid.cells.map((r) => [...r]),
-      },
-    }
-  })
-
-  const frame = newFrames[currentFrame]
+  const frame = frames[currentFrame]
   const gridSize = frame.grid.size
   if (row < 0 || row >= gridSize || col < 0 || col >= gridSize) {
-    return { frames: newFrames, changed: false }
+    return { frames, changed: false }
   }
 
   const targetCell = frame.grid.cells[row][col]
-  const targetColor = targetCell === 'transparent' ? 'transparent' : targetCell.color
+  const targetColor =
+    targetCell === 'transparent' ? 'transparent' : targetCell.color
   if (targetColor === color) {
-    return { frames: newFrames, changed: false }
+    return { frames, changed: false }
   }
 
   const queue: [number, number][] = [[row, col]]
   const seen = new Set<string>([`${row},${col}`])
-  let changed = false
+  const changes: { r: number; c: number; newCell: Cell }[] = []
 
   while (queue.length > 0) {
     const [r, c] = queue.shift()!
     const current = frame.grid.cells[r][c]
-    const currentColor = current === 'transparent' ? 'transparent' : current.color
+    const currentColor =
+      current === 'transparent' ? 'transparent' : current.color
     if (currentColor !== targetColor) continue
 
+    let newCell: Cell
     if (color === 'transparent') {
-      frame.grid.cells[r][c] = 'transparent'
+      newCell = 'transparent'
     } else if (current === 'transparent') {
-      frame.grid.cells[r][c] = { color, shape: 'square' }
+      newCell = { color, shape: 'square' }
     } else {
-      frame.grid.cells[r][c] = { ...current, color }
+      newCell = { ...current, color }
     }
-    changed = true
+    changes.push({ r, c, newCell })
 
     const neighbors: [number, number][] = [
       [r - 1, c],
@@ -156,7 +166,28 @@ function fillCell(
     }
   }
 
-  return { frames: newFrames, changed }
+  if (changes.length === 0) {
+    return { frames, changed: false }
+  }
+
+  const changedRows = new Set(changes.map((ch) => ch.r))
+  const newFrames = frames.map((f, i) => {
+    if (i !== currentFrame) return f
+    return {
+      grid: {
+        size: f.grid.size,
+        cells: f.grid.cells.map((rowArr, rowIndex) =>
+          changedRows.has(rowIndex) ? [...rowArr] : rowArr,
+        ),
+      },
+    }
+  })
+
+  for (const { r, c, newCell } of changes) {
+    newFrames[currentFrame].grid.cells[r][c] = newCell
+  }
+
+  return { frames: newFrames, changed: true }
 }
 
 function moveSelection(
@@ -169,17 +200,7 @@ function moveSelection(
   deltaRow: number,
   deltaCol: number,
 ) {
-  const newFrames = frames.map((f, i) => {
-    if (i !== currentFrame) return f
-    return {
-      grid: {
-        size: f.grid.size,
-        cells: f.grid.cells.map((r) => [...r]),
-      },
-    }
-  })
-
-  const frame = newFrames[currentFrame]
+  const frame = frames[currentFrame]
   const minRow = Math.max(0, Math.min(fromRow, toRow))
   const maxRow = Math.min(frame.grid.size - 1, Math.max(fromRow, toRow))
   const minCol = Math.max(0, Math.min(fromCol, toCol))
@@ -194,11 +215,9 @@ function moveSelection(
     }
   }
 
+  const changedRows = new Set<number>()
   for (const entry of snapshot) {
-    frame.grid.cells[entry.row][entry.col] = 'transparent'
-  }
-
-  for (const entry of snapshot) {
+    changedRows.add(entry.row)
     const targetRow = entry.row + deltaRow
     const targetCol = entry.col + deltaCol
     if (
@@ -207,7 +226,42 @@ function moveSelection(
       targetCol >= 0 &&
       targetCol < frame.grid.size
     ) {
-      frame.grid.cells[targetRow][targetCol] = entry.cell
+      changedRows.add(targetRow)
+    }
+  }
+
+  if (changedRows.size === 0) {
+    return frames
+  }
+
+  const newFrames = frames.map((f, i) => {
+    if (i !== currentFrame) return f
+    return {
+      grid: {
+        size: f.grid.size,
+        cells: f.grid.cells.map((rowArr, rowIndex) =>
+          changedRows.has(rowIndex) ? [...rowArr] : rowArr,
+        ),
+      },
+    }
+  })
+
+  const newFrame = newFrames[currentFrame]
+
+  for (const entry of snapshot) {
+    newFrame.grid.cells[entry.row][entry.col] = 'transparent'
+  }
+
+  for (const entry of snapshot) {
+    const targetRow = entry.row + deltaRow
+    const targetCol = entry.col + deltaCol
+    if (
+      targetRow >= 0 &&
+      targetRow < newFrame.grid.size &&
+      targetCol >= 0 &&
+      targetCol < newFrame.grid.size
+    ) {
+      newFrame.grid.cells[targetRow][targetCol] = entry.cell
     }
   }
 
@@ -240,9 +294,16 @@ export function editorReducer(
   switch (action.type) {
     case 'PAINT_CELL': {
       const { row, col, color, shape, brushSize } = action
-      if (row == null || col == null || color == null || brushSize == null || shape == null)
+      if (
+        row == null ||
+        col == null ||
+        color == null ||
+        brushSize == null ||
+        shape == null
+      )
         return state
-      const cell: Cell = color === 'transparent' ? 'transparent' : { color, shape }
+      const cell: Cell =
+        color === 'transparent' ? 'transparent' : { color, shape }
       const { frames: newFrames, changed } = paintCell(
         project.frames,
         editor.currentFrame,
@@ -511,7 +572,7 @@ export function editorReducer(
       }))
       const migratedProject: Project = {
         ...loaded,
-        gapSize: loaded.gapSize ?? 0,
+        gapSize: loaded.gapSize,
         frames: migratedFrames,
       }
       return {
@@ -542,19 +603,38 @@ export function editorReducer(
       const newFrames = project.frames.map((f, i) => {
         if (i !== target) return f
         if (action.merge) {
-          const targetFrame = cloneFrame(f)
           const sourceFrame = project.frames[source]
-          for (let r = 0; r < targetFrame.grid.size; r++) {
-            for (let c = 0; c < targetFrame.grid.size; c++) {
-              const sourceCell = sourceFrame.grid.cells[r][c]
-              if (sourceCell !== 'transparent') {
-                targetFrame.grid.cells[r][c] = sourceCell
+          const changedRows = new Set<number>()
+          for (let r = 0; r < f.grid.size; r++) {
+            for (let c = 0; c < f.grid.size; c++) {
+              if (sourceFrame.grid.cells[r][c] !== 'transparent') {
+                changedRows.add(r)
+                break
               }
             }
           }
-          return targetFrame
+          if (changedRows.size === 0) return f
+
+          const newTargetFrame = {
+            grid: {
+              size: f.grid.size,
+              cells: f.grid.cells.map((rowArr, r) =>
+                changedRows.has(r) ? [...rowArr] : rowArr,
+              ),
+            },
+          }
+
+          for (const r of changedRows) {
+            for (let c = 0; c < f.grid.size; c++) {
+              const sourceCell = sourceFrame.grid.cells[r][c]
+              if (sourceCell !== 'transparent') {
+                newTargetFrame.grid.cells[r][c] = sourceCell
+              }
+            }
+          }
+          return newTargetFrame
         }
-        return cloneFrame(project.frames[source])
+        return project.frames[source]
       })
       const newProject = { ...project, frames: newFrames }
       return {

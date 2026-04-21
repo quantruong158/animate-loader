@@ -77,6 +77,7 @@ export function LoaderEditor({
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [newProjectName, setNewProjectName] = useState('')
   const [isProjectActionLoading, setIsProjectActionLoading] = useState(false)
+  const currentFrameRef = useRef(0)
 
   useEffect(() => {
     setCanvasSize(Math.min(500, window.innerWidth - 48))
@@ -132,22 +133,21 @@ export function LoaderEditor({
   }, [project.frames])
 
   useEffect(() => {
+    currentFrameRef.current = editor.currentFrame
+  }, [editor.currentFrame])
+
+  useEffect(() => {
     if (!editor.isPlaying) return
 
     const interval = setInterval(() => {
       dispatch({
         type: 'SET_CURRENT_FRAME',
-        frame: (editor.currentFrame + 1) % project.frames.length,
+        frame: (currentFrameRef.current + 1) % project.frames.length,
       })
     }, 1000 / project.frameRate)
 
     return () => clearInterval(interval)
-  }, [
-    editor.isPlaying,
-    editor.currentFrame,
-    project.frames.length,
-    project.frameRate,
-  ])
+  }, [editor.isPlaying, project.frames.length, project.frameRate])
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -357,94 +357,101 @@ export function LoaderEditor({
     setIsDeleteDialogOpen(true)
   }
 
-  const handleBeginPaintSession = () => {
+  const handleBeginPaintSession = useCallback(() => {
     dispatch({ type: 'BEGIN_PAINT_SESSION' })
-  }
+  }, [])
 
-  const handleEndPaintSession = () => {
+  const handleEndPaintSession = useCallback(() => {
     dispatch({ type: 'END_PAINT_SESSION' })
-  }
+  }, [])
 
-  const handleMoveSelection = (
-    fromRow: number,
-    fromCol: number,
-    toRow: number,
-    toCol: number,
-    deltaRow: number,
-    deltaCol: number,
-  ) => {
-    dispatch({
-      type: 'MOVE_SELECTION',
-      fromRow,
-      fromCol,
-      toRow,
-      toCol,
-      deltaRow,
-      deltaCol,
-    })
-  }
+  const handleMoveSelection = useCallback(
+    (
+      fromRow: number,
+      fromCol: number,
+      toRow: number,
+      toCol: number,
+      deltaRow: number,
+      deltaCol: number,
+    ) => {
+      dispatch({
+        type: 'MOVE_SELECTION',
+        fromRow,
+        fromCol,
+        toRow,
+        toCol,
+        deltaRow,
+        deltaCol,
+      })
+    },
+    [],
+  )
 
-  const handleFrameSelect = (frame: number) => {
+  const handleFrameSelect = useCallback((frame: number) => {
     dispatch({ type: 'SET_CURRENT_FRAME', frame })
-  }
+  }, [])
 
-  const handleFrameAdd = (index?: number) => {
+  const handleFrameAdd = useCallback((index?: number) => {
     if (index == null) return
     dispatch({ type: 'ADD_FRAME', index })
-  }
+  }, [])
 
-  const handleFrameDelete = (frame: number) => {
+  const handleFrameDelete = useCallback((frame: number) => {
     dispatch({ type: 'DELETE_FRAME', frame })
-  }
+  }, [])
 
-  const handleToolChange = (
-    tool: 'brush' | 'eraser' | 'select' | 'picker' | 'fill',
-  ) => {
-    dispatch({ type: 'SET_TOOL', tool })
-    if (tool === 'brush') setIsErase(false)
-    if (tool === 'eraser') setIsErase(true)
-    if (tool === 'fill') setIsErase(false)
-  }
+  const handleToolChange = useCallback(
+    (tool: 'brush' | 'eraser' | 'select' | 'picker' | 'fill') => {
+      dispatch({ type: 'SET_TOOL', tool })
+      if (tool === 'brush') setIsErase(false)
+      if (tool === 'eraser') setIsErase(true)
+      if (tool === 'fill') setIsErase(false)
+    },
+    [],
+  )
 
-  const handleBrushSizeChange = (size: 1 | 3) => {
+  const handleBrushSizeChange = useCallback((size: 1 | 3) => {
     dispatch({ type: 'SET_BRUSH_SIZE', size })
-  }
+  }, [])
 
-  const handleBrushShapeChange = (shape: 'square' | 'circle') => {
+  const handleBrushShapeChange = useCallback((shape: 'square' | 'circle') => {
     dispatch({ type: 'SET_BRUSH_SHAPE', shape })
-  }
+  }, [])
 
-  const handleColorChange = (color: string) => {
+  const handleColorChange = useCallback((color: string) => {
     dispatch({ type: 'SET_COLOR', color })
-  }
+  }, [])
 
-  const handleCloneFrame = (source: number) => {
-    dispatch({
-      type: 'CLONE_FRAME',
-      source,
-      target: editor.currentFrame,
-      merge: false,
-    })
-  }
+  const handleCloneFrame = useCallback(
+    (source: number) => {
+      dispatch({
+        type: 'CLONE_FRAME',
+        source,
+        target: editor.currentFrame,
+        merge: false,
+      })
+    },
+    [editor.currentFrame],
+  )
 
-  const handleClearFrame = () => {
+  const handleClearFrame = useCallback(() => {
     dispatch({ type: 'CLEAR_FRAME', frame: editor.currentFrame })
-  }
+  }, [editor.currentFrame])
 
-  const handleTogglePlaying = () => {
+  const handleTogglePlaying = useCallback(() => {
     dispatch({ type: 'TOGGLE_PLAYING' })
-  }
+  }, [])
+
+  const handleUndo = useCallback(() => {
+    dispatch({ type: 'UNDO' })
+  }, [])
+
+  const handleRedo = useCallback(() => {
+    dispatch({ type: 'REDO' })
+  }, [])
 
   const handleCanvasBgToggle = () => {
     setCanvasBg((prev) => (prev === 'white' ? 'transparent' : 'white'))
-  }
-
-  const handleUndo = () => {
-    dispatch({ type: 'UNDO' })
-  }
-
-  const handleRedo = () => {
-    dispatch({ type: 'REDO' })
   }
 
   const handleAddDialogChange = (open: boolean) => {
@@ -529,6 +536,7 @@ export function LoaderEditor({
                   <option value={7}>7x7</option>
                   <option value={8}>8x8</option>
                   <option value={11}>11x11</option>
+                  <option value={15}>15x15</option>
                   <option value={16}>16x16</option>
                 </select>
               </label>

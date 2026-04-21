@@ -113,8 +113,7 @@ export function migrateCell(value: unknown): Cell {
   if (typeof value === 'object' && value !== null) {
     const obj = value as Record<string, unknown>
     const color = typeof obj.color === 'string' ? obj.color : 'transparent'
-    const shape =
-      obj.shape === 'circle' ? 'circle' : ('square' as CellShape)
+    const shape = obj.shape === 'circle' ? 'circle' : ('square' as CellShape)
     if (color === 'transparent') return 'transparent'
     return { color, shape }
   }

@@ -15,9 +15,5 @@
   "routerOnly": false,
   "version": 1,
   "framework": "react",
-  "chosenAddOns": [
-    "eslint",
-    "better-auth",
-    "drizzle"
-  ]
+  "chosenAddOns": ["eslint", "better-auth", "drizzle"]
 }
