@@ -1,5 +1,5 @@
-import type { Project, EditorState, HistoryState, CellColor } from './types'
-import { cloneFrame, createProject, getBrushCells } from './types'
+import type { Project, EditorState, HistoryState, Cell, CellShape } from './types'
+import { cloneFrame, createProject, getBrushCells, migrateCell } from './types'
 
 export interface EditorAction {
   type:
@@ -8,11 +8,13 @@ export interface EditorAction {
     | 'SET_BRUSH_SIZE'
     | 'SET_TOOL'
     | 'SET_COLOR'
+    | 'SET_BRUSH_SHAPE'
     | 'SET_CURRENT_FRAME'
     | 'ADD_FRAME'
     | 'DELETE_FRAME'
     | 'SET_GRID_SIZE'
     | 'SET_FRAME_RATE'
+    | 'SET_GAP_SIZE'
     | 'LOAD_PROJECT'
     | 'CLONE_FRAME'
     | 'CLEAR_FRAME'
@@ -24,7 +26,8 @@ export interface EditorAction {
     | 'REDO'
   row?: number
   col?: number
-  color?: CellColor
+  color?: string
+  shape?: CellShape
   size?: 1 | 3
   tool?: 'brush' | 'eraser' | 'select' | 'picker' | 'fill'
   brushSize?: 1 | 3
@@ -43,14 +46,15 @@ export interface EditorAction {
   toCol?: number
   deltaRow?: number
   deltaCol?: number
+  gapSize?: number
 }
 
 function paintCell(
-  frames: { grid: { size: number; cells: CellColor[][] } }[],
+  frames: { grid: { size: number; cells: Cell[][] } }[],
   currentFrame: number,
   row: number,
   col: number,
-  color: CellColor,
+  cell: Cell,
   brushSize: 1 | 3,
 ) {
   const newFrames = frames.map((f, i) => {
@@ -67,9 +71,21 @@ function paintCell(
   const gridSize = newFrames[currentFrame].grid.size
   const cells = getBrushCells(row, col, brushSize, gridSize)
   for (const [r, c] of cells) {
-    if (newFrames[currentFrame].grid.cells[r][c] !== color) {
-      changed = true
-      newFrames[currentFrame].grid.cells[r][c] = color
+    const existing = newFrames[currentFrame].grid.cells[r][c]
+    if (cell === 'transparent') {
+      if (existing !== 'transparent') {
+        changed = true
+        newFrames[currentFrame].grid.cells[r][c] = 'transparent'
+      }
+    } else {
+      if (
+        existing === 'transparent' ||
+        existing.color !== cell.color ||
+        existing.shape !== cell.shape
+      ) {
+        changed = true
+        newFrames[currentFrame].grid.cells[r][c] = cell
+      }
     }
   }
 
@@ -77,11 +93,11 @@ function paintCell(
 }
 
 function fillCell(
-  frames: { grid: { size: number; cells: CellColor[][] } }[],
+  frames: { grid: { size: number; cells: Cell[][] } }[],
   currentFrame: number,
   row: number,
   col: number,
-  color: CellColor,
+  color: string,
 ) {
   const newFrames = frames.map((f, i) => {
     if (i !== currentFrame) return f
@@ -99,7 +115,8 @@ function fillCell(
     return { frames: newFrames, changed: false }
   }
 
-  const targetColor = frame.grid.cells[row][col]
+  const targetCell = frame.grid.cells[row][col]
+  const targetColor = targetCell === 'transparent' ? 'transparent' : targetCell.color
   if (targetColor === color) {
     return { frames: newFrames, changed: false }
   }
@@ -110,9 +127,17 @@ function fillCell(
 
   while (queue.length > 0) {
     const [r, c] = queue.shift()!
-    if (frame.grid.cells[r][c] !== targetColor) continue
+    const current = frame.grid.cells[r][c]
+    const currentColor = current === 'transparent' ? 'transparent' : current.color
+    if (currentColor !== targetColor) continue
 
-    frame.grid.cells[r][c] = color
+    if (color === 'transparent') {
+      frame.grid.cells[r][c] = 'transparent'
+    } else if (current === 'transparent') {
+      frame.grid.cells[r][c] = { color, shape: 'square' }
+    } else {
+      frame.grid.cells[r][c] = { ...current, color }
+    }
     changed = true
 
     const neighbors: [number, number][] = [
@@ -135,7 +160,7 @@ function fillCell(
 }
 
 function moveSelection(
-  frames: { grid: { size: number; cells: CellColor[][] } }[],
+  frames: { grid: { size: number; cells: Cell[][] } }[],
   currentFrame: number,
   fromRow: number,
   fromCol: number,
@@ -160,29 +185,29 @@ function moveSelection(
   const minCol = Math.max(0, Math.min(fromCol, toCol))
   const maxCol = Math.min(frame.grid.size - 1, Math.max(fromCol, toCol))
 
-  const snapshot: { row: number; col: number; color: CellColor }[] = []
+  const snapshot: { row: number; col: number; cell: Cell }[] = []
   for (let r = minRow; r <= maxRow; r++) {
     for (let c = minCol; c <= maxCol; c++) {
-      const color = frame.grid.cells[r][c]
-      if (color === 'transparent') continue
-      snapshot.push({ row: r, col: c, color })
+      const cell = frame.grid.cells[r][c]
+      if (cell === 'transparent') continue
+      snapshot.push({ row: r, col: c, cell })
     }
   }
 
-  for (const cell of snapshot) {
-    frame.grid.cells[cell.row][cell.col] = 'transparent'
+  for (const entry of snapshot) {
+    frame.grid.cells[entry.row][entry.col] = 'transparent'
   }
 
-  for (const cell of snapshot) {
-    const targetRow = cell.row + deltaRow
-    const targetCol = cell.col + deltaCol
+  for (const entry of snapshot) {
+    const targetRow = entry.row + deltaRow
+    const targetCol = entry.col + deltaCol
     if (
       targetRow >= 0 &&
       targetRow < frame.grid.size &&
       targetCol >= 0 &&
       targetCol < frame.grid.size
     ) {
-      frame.grid.cells[targetRow][targetCol] = cell.color
+      frame.grid.cells[targetRow][targetCol] = entry.cell
     }
   }
 
@@ -214,15 +239,16 @@ export function editorReducer(
 
   switch (action.type) {
     case 'PAINT_CELL': {
-      const { row, col, color, brushSize } = action
-      if (row == null || col == null || color == null || brushSize == null)
+      const { row, col, color, shape, brushSize } = action
+      if (row == null || col == null || color == null || brushSize == null || shape == null)
         return state
+      const cell: Cell = color === 'transparent' ? 'transparent' : { color, shape }
       const { frames: newFrames, changed } = paintCell(
         project.frames,
         editor.currentFrame,
         row,
         col,
-        color,
+        cell,
         brushSize,
       )
       if (!changed) return state
@@ -342,10 +368,22 @@ export function editorReducer(
         paintSessionDirty: false,
       }
     }
+    case 'SET_BRUSH_SHAPE': {
+      if (action.shape == null) return state
+      if (editor.brushShape === action.shape) return state
+      const newEditor = { ...editor, brushShape: action.shape }
+      return {
+        project,
+        editor: newEditor,
+        history,
+        future,
+        paintSessionStart: null,
+        paintSessionDirty: false,
+      }
+    }
     case 'SET_CURRENT_FRAME': {
       if (action.frame == null) return state
       const newEditor = { ...editor, currentFrame: action.frame }
-      // Don't add to history for frame changes during playback - just state update
       if (editor.isPlaying) {
         return {
           project,
@@ -424,6 +462,7 @@ export function editorReducer(
         action.gridSize,
         project.frameCount,
         project.frameRate,
+        project.gapSize,
       )
       const newEditor = { ...editor, currentFrame: 0 }
       return {
@@ -447,16 +486,43 @@ export function editorReducer(
         paintSessionDirty: false,
       }
     }
+    case 'SET_GAP_SIZE': {
+      if (action.gapSize == null) return state
+      const newProject = { ...project, gapSize: action.gapSize }
+      return {
+        project: newProject,
+        editor,
+        history: [...history, current],
+        future: [],
+        paintSessionStart: null,
+        paintSessionDirty: false,
+      }
+    }
     case 'LOAD_PROJECT': {
       if (action.project == null) return state
+      const loaded = action.project
+      const migratedFrames = loaded.frames.map((frame) => ({
+        grid: {
+          size: frame.grid.size,
+          cells: frame.grid.cells.map((row) =>
+            row.map((cell) => migrateCell(cell)),
+          ),
+        },
+      }))
+      const migratedProject: Project = {
+        ...loaded,
+        gapSize: loaded.gapSize ?? 0,
+        frames: migratedFrames,
+      }
       return {
-        project: action.project,
+        project: migratedProject,
         editor: {
           currentFrame: 0,
           brushSize: 1,
           selectedColor: '#1e293b',
           isPlaying: false,
           tool: 'brush',
+          brushShape: 'square',
         },
         history: [],
         future: [],
@@ -480,8 +546,9 @@ export function editorReducer(
           const sourceFrame = project.frames[source]
           for (let r = 0; r < targetFrame.grid.size; r++) {
             for (let c = 0; c < targetFrame.grid.size; c++) {
-              if (sourceFrame.grid.cells[r][c] !== 'transparent') {
-                targetFrame.grid.cells[r][c] = sourceFrame.grid.cells[r][c]
+              const sourceCell = sourceFrame.grid.cells[r][c]
+              if (sourceCell !== 'transparent') {
+                targetFrame.grid.cells[r][c] = sourceCell
               }
             }
           }
@@ -606,6 +673,7 @@ export function createInitialState(
     selectedColor: '#1e293b',
     isPlaying: false,
     tool: 'brush',
+    brushShape: 'square',
   }
   return {
     project,
@@ -626,6 +694,7 @@ export function createStateFromProject(project: Project): EditorReducerState {
       selectedColor: '#1e293b',
       isPlaying: false,
       tool: 'brush',
+      brushShape: 'square',
     },
     history: [],
     future: [],

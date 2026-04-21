@@ -71,6 +71,7 @@ export function LoaderEditor({
 }: LoaderEditorProps) {
   const [canvasSize, setCanvasSize] = useState(400)
   const [isErase, setIsErase] = useState(false)
+  const [canvasBg, setCanvasBg] = useState<'white' | 'transparent'>('white')
   const importInputRef = useRef<HTMLInputElement>(null)
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
@@ -122,7 +123,7 @@ export function LoaderEditor({
       for (const row of frame.grid.cells) {
         for (const cell of row) {
           if (cell !== 'transparent') {
-            colors.add(cell)
+            colors.add(cell.color)
           }
         }
       }
@@ -241,10 +242,17 @@ export function LoaderEditor({
           editor.tool === 'eraser' || isErase
             ? 'transparent'
             : editor.selectedColor,
+        shape: editor.brushShape,
         brushSize: editor.brushSize,
       })
     },
-    [isErase, editor.selectedColor, editor.brushSize, editor.tool],
+    [
+      isErase,
+      editor.selectedColor,
+      editor.brushSize,
+      editor.tool,
+      editor.brushShape,
+    ],
   )
 
   const handleFill = useCallback(
@@ -264,12 +272,13 @@ export function LoaderEditor({
 
   const handlePick = useCallback(
     (row: number, col: number) => {
-      const color = currentFrame.grid.cells[row][col]
-      if (color === 'transparent') {
+      const cell = currentFrame.grid.cells[row][col]
+      if (cell === 'transparent') {
         dispatch({ type: 'SET_TOOL', tool: 'eraser' })
         setIsErase(true)
       } else {
-        dispatch({ type: 'SET_COLOR', color })
+        dispatch({ type: 'SET_COLOR', color: cell.color })
+        dispatch({ type: 'SET_BRUSH_SHAPE', shape: cell.shape })
         dispatch({ type: 'SET_TOOL', tool: 'brush' })
         setIsErase(false)
       }
@@ -285,6 +294,7 @@ export function LoaderEditor({
     downloadFrameSVG(
       currentFrame,
       `loader-frame-${editor.currentFrame + 1}.svg`,
+      project.gapSize,
     )
   }
 
@@ -318,6 +328,13 @@ export function LoaderEditor({
     dispatch({
       type: 'SET_GRID_SIZE',
       gridSize: Number(event.target.value),
+    })
+  }
+
+  const handleGapSizeChange = (event: ChangeEvent<HTMLInputElement>) => {
+    dispatch({
+      type: 'SET_GAP_SIZE',
+      gapSize: Math.max(0, Math.min(8, Number(event.target.value))),
     })
   }
 
@@ -393,6 +410,10 @@ export function LoaderEditor({
     dispatch({ type: 'SET_BRUSH_SIZE', size })
   }
 
+  const handleBrushShapeChange = (shape: 'square' | 'circle') => {
+    dispatch({ type: 'SET_BRUSH_SHAPE', shape })
+  }
+
   const handleColorChange = (color: string) => {
     dispatch({ type: 'SET_COLOR', color })
   }
@@ -412,6 +433,10 @@ export function LoaderEditor({
 
   const handleTogglePlaying = () => {
     dispatch({ type: 'TOGGLE_PLAYING' })
+  }
+
+  const handleCanvasBgToggle = () => {
+    setCanvasBg((prev) => (prev === 'white' ? 'transparent' : 'white'))
   }
 
   const handleUndo = () => {
@@ -508,6 +533,17 @@ export function LoaderEditor({
                 </select>
               </label>
               <label className="flex items-center gap-2">
+                Gap:
+                <input
+                  type="number"
+                  value={project.gapSize}
+                  onChange={handleGapSizeChange}
+                  className="w-14 px-2 py-1 border bg-background"
+                  min={0}
+                  max={8}
+                />
+              </label>
+              <label className="flex items-center gap-2">
                 Frames: {project.frames.length}
               </label>
               <label className="flex items-center gap-2">
@@ -521,6 +557,13 @@ export function LoaderEditor({
                   max={60}
                 />
               </label>
+              <Button
+                variant="outline"
+                onClick={handleCanvasBgToggle}
+                title="Toggle canvas background"
+              >
+                {canvasBg === 'white' ? 'BG: White' : 'BG: Transparent'}
+              </Button>
               <Button role="button" onClick={handleExport}>
                 Export SVG
               </Button>
@@ -586,6 +629,8 @@ export function LoaderEditor({
             isErase={isErase}
             isPlaying={editor.isPlaying}
             tool={editor.tool}
+            gapSize={project.gapSize}
+            canvasBg={canvasBg}
             onCellPaint={handlePaint}
             onCellFill={handleFill}
             onCellPick={handlePick}
@@ -606,6 +651,7 @@ export function LoaderEditor({
           <BrushToolbar
             tool={editor.tool}
             brushSize={editor.brushSize}
+            brushShape={editor.brushShape}
             selectedColor={editor.selectedColor}
             isPlaying={editor.isPlaying}
             frameCount={project.frames.length}
@@ -615,6 +661,7 @@ export function LoaderEditor({
             canRedo={canRedo}
             onToolChange={handleToolChange}
             onBrushSizeChange={handleBrushSizeChange}
+            onBrushShapeChange={handleBrushShapeChange}
             onColorChange={handleColorChange}
             onIsEraseChange={setIsErase}
             onCloneFrame={handleCloneFrame}

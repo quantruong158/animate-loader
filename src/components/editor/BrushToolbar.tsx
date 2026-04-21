@@ -11,6 +11,8 @@ import {
   Copy,
   MousePointer2,
   Pipette,
+  Square,
+  Circle,
 } from 'lucide-react'
 import {
   DropdownMenu,
@@ -66,6 +68,7 @@ function swatchVars(color: string): CSSProperties {
 interface BrushToolbarProps {
   tool: 'brush' | 'eraser' | 'select' | 'picker' | 'fill'
   brushSize: 1 | 3
+  brushShape: 'square' | 'circle'
   selectedColor: string
   isPlaying: boolean
   frameCount: number
@@ -77,6 +80,7 @@ interface BrushToolbarProps {
     tool: 'brush' | 'eraser' | 'select' | 'picker' | 'fill',
   ) => void
   onBrushSizeChange: (size: 1 | 3) => void
+  onBrushShapeChange: (shape: 'square' | 'circle') => void
   onColorChange: (color: string) => void
   onIsEraseChange: (isErase: boolean) => void
   onCloneFrame: (source: number) => void
@@ -89,6 +93,7 @@ interface BrushToolbarProps {
 export function BrushToolbar({
   tool,
   brushSize,
+  brushShape,
   selectedColor,
   isPlaying,
   frameCount,
@@ -98,6 +103,7 @@ export function BrushToolbar({
   canRedo,
   onToolChange,
   onBrushSizeChange,
+  onBrushShapeChange,
   onColorChange,
   onIsEraseChange,
   onCloneFrame,
@@ -225,6 +231,29 @@ export function BrushToolbar({
             className="size-8"
           >
             {size}
+          </Button>
+        ))}
+      </div>
+
+      <div className="w-px h-6 bg-border" />
+
+      {/* Brush Shape */}
+      <div className="flex items-center gap-1">
+        <span className="text-sm text-muted-foreground mr-1">Shape:</span>
+        {(['square', 'circle'] as const).map((shape) => (
+          <Button
+            key={shape}
+            variant={brushShape === shape ? 'default' : 'outline'}
+            onClick={() => onBrushShapeChange(shape)}
+            disabled={isPlaying || tool === 'select' || tool === 'fill'}
+            className="size-8"
+            title={shape === 'square' ? 'Square brush' : 'Circle brush'}
+          >
+            {shape === 'square' ? (
+              <Square className="w-4 h-4" />
+            ) : (
+              <Circle className="w-4 h-4" />
+            )}
           </Button>
         ))}
       </div>

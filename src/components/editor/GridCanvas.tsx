@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { getBrushCells } from '@/lib/editor/types'
-import type { Grid } from '@/lib/editor/types'
+import type { Grid, Cell } from '@/lib/editor/types'
 
 type ToolMode = 'brush' | 'eraser' | 'select' | 'picker' | 'fill'
 
@@ -20,6 +20,8 @@ interface GridCanvasProps {
   isErase: boolean
   isPlaying: boolean
   tool: ToolMode
+  gapSize: number
+  canvasBg: 'white' | 'transparent'
   onCellPaint: (row: number, col: number) => void
   onCellFill: (row: number, col: number) => void
   onCellPick: (row: number, col: number) => void
@@ -113,6 +115,8 @@ export function GridCanvas({
   isErase,
   isPlaying,
   tool,
+  gapSize,
+  canvasBg,
   onCellPaint,
   onCellFill,
   onCellPick,
@@ -122,7 +126,8 @@ export function GridCanvas({
   canvasSize = 400,
 }: GridCanvasProps) {
   const svgRef = useRef<SVGSVGElement | null>(null)
-  const cellSize = canvasSize / grid.size
+  const totalGap = (grid.size - 1) * gapSize
+  const cellSize = (canvasSize - totalGap) / grid.size
   const gridLineColor = '#e5e7eb'
   const [hoverCell, setHoverCell] = useState<[number, number] | null>(null)
   const [isMouseDown, setIsMouseDown] = useState(false)
@@ -352,8 +357,9 @@ export function GridCanvas({
     const rect = e.currentTarget.getBoundingClientRect()
     const x = e.clientX - rect.left
     const y = e.clientY - rect.top
-    const col = Math.floor(x / cellSize)
-    const row = Math.floor(y / cellSize)
+    const step = cellSize + gapSize
+    const col = Math.floor(x / step)
+    const row = Math.floor(y / step)
     if (row >= 0 && row < grid.size && col >= 0 && col < grid.size) {
       return [row, col]
     }
@@ -466,13 +472,13 @@ export function GridCanvas({
         .map((cell) => ({
           sourceRow: cell.row,
           sourceCol: cell.col,
-          color: grid.cells[cell.row][cell.col],
+          cell: grid.cells[cell.row][cell.col],
           targetRow: cell.row + dragDelta[0],
           targetCol: cell.col + dragDelta[1],
         }))
         .filter(
           (cell) =>
-            cell.color !== 'transparent' &&
+            cell.cell !== 'transparent' &&
             cell.targetRow >= 0 &&
             cell.targetRow < grid.size &&
             cell.targetCol >= 0 &&
@@ -488,6 +494,48 @@ export function GridCanvas({
         : 'cursor-default'
       : 'cursor-crosshair'
 
+  const cellPos = (row: number, col: number) => ({
+    x: col * (cellSize + gapSize),
+    y: row * (cellSize + gapSize),
+  })
+
+  const renderCellShape = (
+    row: number,
+    col: number,
+    cell: Cell,
+    key: string,
+    extraProps?: Record<string, unknown>,
+  ) => {
+    if (cell === 'transparent') return null
+    const { x, y } = cellPos(row, col)
+    const shape = cell.shape
+
+    if (shape === 'circle') {
+      return (
+        <circle
+          key={key}
+          cx={x + cellSize / 2}
+          cy={y + cellSize / 2}
+          r={cellSize / 2}
+          fill={cell.color}
+          {...extraProps}
+        />
+      )
+    }
+
+    return (
+      <rect
+        key={key}
+        x={x}
+        y={y}
+        width={cellSize}
+        height={cellSize}
+        fill={cell.color}
+        {...extraProps}
+      />
+    )
+  }
+
   return (
     <svg
       ref={svgRef}
@@ -500,30 +548,41 @@ export function GridCanvas({
       onMouseLeave={handleMouseLeave}
       className={`block border border-border bg-background select-none ${cursorClass}`}
     >
-      <rect x={0} y={0} width={canvasSize} height={canvasSize} fill="#ffffff" />
+      <rect
+        x={0}
+        y={0}
+        width={canvasSize}
+        height={canvasSize}
+        fill={canvasBg === 'white' ? '#ffffff' : 'transparent'}
+      />
 
       {grid.cells.map((row, r) =>
         row.map((cell, c) => {
-          const x = c * cellSize
-          const y = r * cellSize
+          const { x, y } = cellPos(r, c)
           return (
-            <rect
-              key={`${r}-${c}`}
-              x={x}
-              y={y}
-              width={cellSize}
-              height={cellSize}
-              fill={cell}
-              stroke={isPlaying ? 'none' : gridLineColor}
-              strokeWidth={0.5}
-            />
+            <g key={`${r}-${c}`}>
+              {cell === 'transparent' ? (
+                <rect
+                  x={x}
+                  y={y}
+                  width={cellSize}
+                  height={cellSize}
+                  fill="transparent"
+                  stroke={isPlaying ? 'none' : 'var(--ring)'}
+                  strokeWidth={0.5}
+                />
+              ) : (
+                renderCellShape(r, c, cell, `${r}-${c}`, {
+                  stroke: 'none',
+                })
+              )}
+            </g>
           )
         }),
       )}
 
       {hoverCells.map(([r, c]) => {
-        const x = c * cellSize
-        const y = r * cellSize
+        const { x, y } = cellPos(r, c)
         return (
           <rect
             key={`preview-${r}-${c}`}
@@ -542,15 +601,17 @@ export function GridCanvas({
 
       {isSelecting && normalizedSelection && (
         <rect
-          x={normalizedSelection.minCol * cellSize}
-          y={normalizedSelection.minRow * cellSize}
+          x={normalizedSelection.minCol * (cellSize + gapSize)}
+          y={normalizedSelection.minRow * (cellSize + gapSize)}
           width={
             (normalizedSelection.maxCol - normalizedSelection.minCol + 1) *
-            cellSize
+              cellSize +
+            (normalizedSelection.maxCol - normalizedSelection.minCol) * gapSize
           }
           height={
             (normalizedSelection.maxRow - normalizedSelection.minRow + 1) *
-            cellSize
+              cellSize +
+            (normalizedSelection.maxRow - normalizedSelection.minRow) * gapSize
           }
           fill="transparent"
           stroke="#2563eb"
@@ -560,33 +621,56 @@ export function GridCanvas({
         />
       )}
 
-      {selectedCells.map((cell) => (
-        <rect
-          key={`selected-cell-${cell.row}-${cell.col}`}
-          x={cell.col * cellSize}
-          y={cell.row * cellSize}
-          width={cellSize}
-          height={cellSize}
-          fill="transparent"
-          stroke="#2563eb"
-          strokeWidth={1.5}
-          strokeDasharray="4 2"
-          pointerEvents="none"
-        />
-      ))}
+      {selectedCells.map((cell) => {
+        const { x, y } = cellPos(cell.row, cell.col)
+        return (
+          <rect
+            key={`selected-cell-${cell.row}-${cell.col}`}
+            x={x}
+            y={y}
+            width={cellSize}
+            height={cellSize}
+            fill="transparent"
+            stroke="#2563eb"
+            strokeWidth={1.5}
+            strokeDasharray="4 2"
+            pointerEvents="none"
+          />
+        )
+      })}
 
-      {movingPreviewCells.map((cell) => (
-        <rect
-          key={`move-preview-${cell.sourceRow}-${cell.sourceCol}`}
-          x={cell.targetCol * cellSize}
-          y={cell.targetRow * cellSize}
-          width={cellSize}
-          height={cellSize}
-          fill={cell.color}
-          opacity={0.65}
-          pointerEvents="none"
-        />
-      ))}
+      {movingPreviewCells.map((entry) => {
+        const { x, y } = cellPos(entry.targetRow, entry.targetCol)
+        const cell = entry.cell
+        if (cell === 'transparent') return null
+
+        if (cell.shape === 'circle') {
+          return (
+            <circle
+              key={`move-preview-${entry.sourceRow}-${entry.sourceCol}`}
+              cx={x + cellSize / 2}
+              cy={y + cellSize / 2}
+              r={cellSize / 2}
+              fill={cell.color}
+              opacity={0.65}
+              pointerEvents="none"
+            />
+          )
+        }
+
+        return (
+          <rect
+            key={`move-preview-${entry.sourceRow}-${entry.sourceCol}`}
+            x={x}
+            y={y}
+            width={cellSize}
+            height={cellSize}
+            fill={cell.color}
+            opacity={0.65}
+            pointerEvents="none"
+          />
+        )
+      })}
     </svg>
   )
 }

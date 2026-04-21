@@ -1,4 +1,4 @@
-import type { Frame } from '@/lib/editor/types'
+import type { Frame, Cell } from '@/lib/editor/types'
 import { Button } from '@/components/ui/button'
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area'
 
@@ -47,6 +47,14 @@ export function FrameTimeline({
     const cellSize = thumbnailSize / frame.grid.size
     const isSelected = index === currentFrame
 
+    const cellFill = (cell: Cell): string =>
+      cell === 'transparent' ? 'transparent' : cell.color
+
+    const cellShape = (cell: Cell): 'square' | 'circle' =>
+      cell === 'transparent' ? 'square' : cell.shape
+
+    const svgSize = thumbnailSize
+
     return (
       <div key={index} className="relative">
         <div
@@ -70,16 +78,43 @@ export function FrameTimeline({
             className="block border"
           >
             {frame.grid.cells.map((row, r) =>
-              row.map((cell, c) => (
-                <rect
-                  key={`${r}-${c}`}
-                  x={c * cellSize}
-                  y={r * cellSize}
-                  width={cellSize}
-                  height={cellSize}
-                  fill={cell}
-                />
-              )),
+              row.map((cell, c) => {
+                const x = c * cellSize
+                const y = r * cellSize
+                if (cell === 'transparent') {
+                  return (
+                    <rect
+                      key={`${r}-${c}`}
+                      x={x}
+                      y={y}
+                      width={cellSize}
+                      height={cellSize}
+                      fill="transparent"
+                    />
+                  )
+                }
+                if (cellShape(cell) === 'circle') {
+                  return (
+                    <circle
+                      key={`${r}-${c}`}
+                      cx={x + cellSize / 2}
+                      cy={y + cellSize / 2}
+                      r={cellSize / 2}
+                      fill={cellFill(cell)}
+                    />
+                  )
+                }
+                return (
+                  <rect
+                    key={`${r}-${c}`}
+                    x={x}
+                    y={y}
+                    width={cellSize}
+                    height={cellSize}
+                    fill={cellFill(cell)}
+                  />
+                )
+              }),
             )}
           </svg>
           <div className="absolute -bottom-1 -right-1 bg-background text-xs px-1 rounded text-muted-foreground font-mono">

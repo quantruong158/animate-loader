@@ -1,8 +1,19 @@
-export type CellColor = string | 'transparent'
+export type CellShape = 'square' | 'circle'
+
+export interface CellData {
+  color: string
+  shape: CellShape
+}
+
+export type Cell = CellData | 'transparent'
+
+export function isCellData(cell: Cell): cell is CellData {
+  return cell !== 'transparent'
+}
 
 export interface Grid {
   size: number
-  cells: CellColor[][]
+  cells: Cell[][]
 }
 
 export interface Frame {
@@ -13,6 +24,7 @@ export interface Project {
   gridSize: number
   frameCount: number
   frameRate: number
+  gapSize: number
   frames: Frame[]
 }
 
@@ -22,6 +34,7 @@ export interface EditorState {
   selectedColor: string
   isPlaying: boolean
   tool: 'brush' | 'eraser' | 'select' | 'picker' | 'fill'
+  brushShape: CellShape
 }
 
 export interface HistoryState {
@@ -29,7 +42,7 @@ export interface HistoryState {
 }
 
 export function createEmptyGrid(size: number): Grid {
-  const cells: CellColor[][] = Array.from({ length: size }, () =>
+  const cells: Cell[][] = Array.from({ length: size }, () =>
     Array.from({ length: size }, () => 'transparent'),
   )
   return { size, cells }
@@ -43,11 +56,13 @@ export function createProject(
   gridSize: number,
   frameCount: number,
   frameRate: number,
+  gapSize = 0,
 ): Project {
   return {
     gridSize,
     frameCount,
     frameRate,
+    gapSize,
     frames: Array.from({ length: frameCount }, () =>
       createEmptyFrame(gridSize),
     ),
@@ -88,4 +103,20 @@ export function getBrushCells(
     }
   }
   return cells
+}
+
+export function migrateCell(value: unknown): Cell {
+  if (value === 'transparent') return 'transparent'
+  if (typeof value === 'string') {
+    return { color: value, shape: 'square' }
+  }
+  if (typeof value === 'object' && value !== null) {
+    const obj = value as Record<string, unknown>
+    const color = typeof obj.color === 'string' ? obj.color : 'transparent'
+    const shape =
+      obj.shape === 'circle' ? 'circle' : ('square' as CellShape)
+    if (color === 'transparent') return 'transparent'
+    return { color, shape }
+  }
+  return 'transparent'
 }
