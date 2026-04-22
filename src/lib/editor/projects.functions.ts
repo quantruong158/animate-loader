@@ -26,22 +26,41 @@ async function getCurrentUserId() {
   return session?.user.id ?? null
 }
 
-export const getMyProjects = createServerFn({ method: 'GET' }).handler(
-  async (): Promise<LoaderProjectSummary[]> => {
-    const userId = await getCurrentUserId()
-    if (!userId) return []
+export const getMyProjects = createServerFn({ method: 'GET' })
+  .inputValidator((data: { limit?: number; offset?: number }) => data)
+  .handler(
+    async ({
+      data,
+    }: {
+      data: { limit?: number; offset?: number }
+    }): Promise<LoaderProjectSummary[]> => {
+      const userId = await getCurrentUserId()
+      if (!userId) return []
 
-    return db
-      .select({
-        id: loaderProject.id,
-        name: loaderProject.name,
-        updatedAt: loaderProject.updatedAt,
-      })
-      .from(loaderProject)
-      .where(eq(loaderProject.userId, userId))
-      .orderBy(desc(loaderProject.updatedAt))
-  },
-)
+      const baseQuery = db
+        .select({
+          id: loaderProject.id,
+          name: loaderProject.name,
+          updatedAt: loaderProject.updatedAt,
+        })
+        .from(loaderProject)
+        .where(eq(loaderProject.userId, userId))
+        .orderBy(desc(loaderProject.updatedAt))
+
+      if (typeof data.limit === 'number' && data.limit > 0) {
+        if (typeof data.offset === 'number' && data.offset > 0) {
+          return baseQuery.limit(data.limit).offset(data.offset)
+        }
+        return baseQuery.limit(data.limit)
+      }
+
+      if (typeof data.offset === 'number' && data.offset > 0) {
+        return baseQuery.offset(data.offset)
+      }
+
+      return baseQuery
+    },
+  )
 
 export const getProjectById = createServerFn({ method: 'GET' })
   .inputValidator((data: { id: string }) => data)

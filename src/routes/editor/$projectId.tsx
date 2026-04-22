@@ -20,7 +20,7 @@ export const Route = createFileRoute('/editor/$projectId')({
   loader: async ({ params }) => {
     const [project, projects] = await Promise.all([
       getProjectById({ data: { id: params.projectId } }),
-      getMyProjects(),
+      getMyProjects({ data: {} }),
     ])
 
     if (!project) {
