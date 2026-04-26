@@ -188,7 +188,7 @@ export function exportSVG(project: Project): string {
           )
         } else {
           rects.push(
-            `<rect x="${x}" y="${y}" width="${cellSize}" height="${cellSize}" fill="${runs[0].color}"/>`,
+            `<rect x="${x}" y="${y}" width="${cellSize}" height="${cellSize}" fill="${runs[0].color}" shape-rendering="crispEdges"/>`,
           )
         }
         continue
@@ -221,7 +221,7 @@ export function exportSVG(project: Project): string {
         )
       } else {
         rects.push(
-          `<rect x="${x}" y="${y}" width="${cellSize}" height="${cellSize}" fill="${runs[0].color}" style="animation:${animationName} ${totalDuration}s step-end infinite"/>`,
+          `<rect x="${x}" y="${y}" width="${cellSize}" height="${cellSize}" fill="${runs[0].color}" shape-rendering="crispEdges" style="animation:${animationName} ${totalDuration}s step-end infinite"/>`,
         )
       }
     }
@@ -255,7 +255,7 @@ export function exportFrameSVG(frame: Frame, gapSize = 0): string {
         )
       } else {
         rects.push(
-          `<rect x="${x}" y="${y}" width="${cellSize}" height="${cellSize}" fill="${cell.color}"/>`,
+          `<rect x="${x}" y="${y}" width="${cellSize}" height="${cellSize}" fill="${cell.color}" shape-rendering="crispEdges"/>`,
         )
       }
     }

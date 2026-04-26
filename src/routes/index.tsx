@@ -47,8 +47,8 @@ function LandingPage() {
   return (
     <main className="relative overflow-hidden">
       <div className="pointer-events-none absolute inset-0 -z-10">
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1200px] h-[600px] bg-primary/5 rounded-full blur-[120px]" />
-        <div className="absolute bottom-[20%] right-0 w-[800px] h-[400px] bg-blue-500/5 rounded-full blur-[100px]" />
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-300 h-150 bg-primary/5 rounded-full blur-[120px]" />
+        <div className="absolute bottom-[20%] right-0 w-200 h-100 bg-blue-500/5 rounded-full blur-[100px]" />
       </div>
 
       <Navbar />
@@ -166,8 +166,8 @@ function HeroSection() {
 
           <div className="absolute -bottom-6 -left-6 sm:-bottom-8 sm:-left-8 size-20 sm:size-24 border border-border/50 bg-card/90 shadow-lg p-2 animate-float-slow">
             <img
-              src="/pulsing.svg"
-              alt="Pulsing pixel animation preview"
+              src="/spinner.svg"
+              alt="Spinner pixel animation preview"
               className="w-full h-full"
             />
           </div>
@@ -343,7 +343,7 @@ function GallerySection() {
           <img
             src="/random.svg"
             alt="Random color pattern animation"
-            className="w-full h-full max-h-[140px] object-contain transition-transform duration-500"
+            className="w-full h-full max-h-40 object-contain transition-transform duration-500"
             loading="lazy"
           />
         </div>
@@ -352,7 +352,7 @@ function GallerySection() {
           <img
             src="/floating_head.svg"
             alt="Animated floating pixel face"
-            className="w-full h-full max-h-[160px] object-contain transition-transform duration-500"
+            className="w-full h-full max-h-40 object-contain transition-transform duration-500"
             loading="lazy"
           />
         </div>
@@ -361,7 +361,7 @@ function GallerySection() {
           <img
             src="/scanning.svg"
             alt="Scanning pixel animation"
-            className="w-full h-full max-h-[140px] object-contain transition-transform duration-500"
+            className="w-full h-full max-h-35 object-contain transition-transform duration-500"
             loading="lazy"
           />
         </div>
@@ -370,7 +370,7 @@ function GallerySection() {
           <img
             src="/pulsing.svg"
             alt="Pulsing ripple animation"
-            className="w-full h-full max-h-[140px] object-contain transition-transform duration-500"
+            className="w-full h-full max-h-35 object-contain transition-transform duration-500"
             loading="lazy"
           />
         </div>
